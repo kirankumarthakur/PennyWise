@@ -1,0 +1,27 @@
+{
+  "accuracy": 0.7831325301204819,
+  "cv_mean": 0.7269853607980308,
+  "cv_std": 0.05996804449354203,
+  "model_type": "Production Ensemble (Logistic + RF + GradientBoost)",
+  "categories": [
+    "Apparel",
+    "Beauty",
+    "Bills & Utilities",
+    "Food & Dining",
+    "Gift",
+    "Gpay Reward",
+    "Health",
+    "Income",
+    "Investment",
+    "Miscellaneous",
+    "Money transfer",
+    "Personal & Family",
+    "Recurring Deposit",
+    "Transportation"
+  ],
+  "training_samples": 993,
+  "test_samples": 249,
+  "features_count": 522,
+  "improvement": "+4.1pp",
+  "training_date": "2026-09-28T14:36:17.880854"
+}
