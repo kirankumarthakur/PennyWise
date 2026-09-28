@@ -1,0 +1,20 @@
+[project]
+name = "pennywise"
+version = "1.0.0"
+description = "PennyWise - AI-Powered Personal Financial Operating System"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "backend",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+backend = { path = "backend", editable = true }
+
+[project.scripts]
+dev = "backend:main"
+pennywise = "backend:main"
+
