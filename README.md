@@ -36,66 +36,107 @@ PennyWise is a local, privacy-first personal finance platform and expense tracke
 
 ---
 
+## Requirements & Prerequisites
+
+### 1. System Requirements
+- **Python**: `3.10+` (managed via [`backend/pyproject.toml`](backend/pyproject.toml))
+- **Node.js**: `18.0+` & `npm` (managed via [`frontend/package.json`](frontend/package.json))
+- **Package Manager**: [`uv`](https://docs.astral.sh/uv/) (recommended) or standard `pip` / `venv`
+
+### 2. External OCR Engine (For Receipt Extraction)
+PennyWise uses **Tesseract OCR** for parsing printed receipts and scanned PDF invoices:
+- **Windows**: Install using winget or installer:
+  ```powershell
+  winget install UB-Mannheim.TesseractOCR
+  ```
+  *(Default detection path: `C:\Program Files\Tesseract-OCR\tesseract.exe` or set `TESSERACT_CMD` environment variable)*
+- **Linux (Debian/Ubuntu)**:
+  ```bash
+  sudo apt update && sudo apt install -y tesseract-ocr
+  ```
+- **macOS**:
+  ```bash
+  brew install tesseract
+  ```
+
+### 3. Backend Dependencies
+All Python dependencies are defined in [`backend/pyproject.toml`](backend/pyproject.toml):
+- **Web & API**: `flask`, `flask-cors`, `requests`
+- **AI & LLM SDKs**: `google-genai` (Gemini), `openai` (GPT-4o), `anthropic` (Claude)
+- **Document & Image Processing**: `pytesseract`, `opencv-python`, `pillow`, `pdfplumber`, `pymupdf`, `pypdf2`
+- **Machine Learning & Analytics**: `scikit-learn`, `pandas`, `numpy`, `joblib`, `python-dateutil`
+
+### 4. Frontend Dependencies
+All UI dependencies are defined in [`frontend/package.json`](frontend/package.json):
+- **Framework**: `react 18`, `react-dom`
+- **Build Tool**: `vite`
+- **Styling**: `tailwindcss`, `postcss`, `autoprefixer`
+- **Icons & Motion**: `lucide-react`, `framer-motion`
+
+### 5. AI API Key (Optional)
+PennyWise runs completely offline with built-in heuristic rules and local ML classification even without any API keys. To enable the AI Copilot and Multimodal Receipt Parsing:
+- **Google Gemini API Key** (Free tier available via [Google AI Studio](https://aistudio.google.com/))
+- **OpenAI API Key** or **Anthropic API Key** (Optional)
+
+---
+
 ## Getting Started
 
-### Prerequisites
-- Python 3.10+
-- uv
-- Node.js 18+ and npm
+### 1. Backend Setup
 
----
-
-### Backend Setup
-
-```bash
-# Sync dependencies and configure virtual environment
-uv sync
-
-# Start the backend API server (runs on http://localhost:5000)
-uv run dev
-```
-
-You can also run directly from the `backend` directory:
+Using **uv** (recommended):
 ```bash
 cd backend
+uv sync
 uv run dev
 ```
 
+Using standard **pip**:
+```bash
+cd backend
+python -m venv .venv
+
+# On Windows:
+.venv\Scripts\activate
+# On Linux/macOS:
+source .venv/bin/activate
+
+pip install -e .
+python -m backend.app
+```
+The backend API runs on `http://localhost:5000`.
+
 ---
 
-### Frontend Setup
+### 2. Frontend Setup
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Start the development server (runs on http://localhost:5173)
 npm run dev
 ```
+The frontend application runs on `http://localhost:5173`.
 
 ---
 
 ## AI Provider Configuration
 
-PennyWise includes offline heuristic fallbacks if no API key is supplied. To enable LLM features:
-
-1. Open `http://localhost:5173` and go to Settings.
-2. Choose your provider:
-   - Google Gemini (free tier available via Google AI Studio)
-   - OpenAI
-   - Anthropic
-3. Enter your API key and click Test Connection.
-4. Save settings.
+1. Open `http://localhost:5173` and click **Settings**.
+2. Select your AI engine:
+   - **Google Gemini** (Gemini 3.8 Flash, 3.7 Flash, 3.5 Flash)
+   - **OpenAI** (GPT-4o, GPT-4o-mini)
+   - **Anthropic Claude** (Claude 3.5 Sonnet, Claude 3.5 Haiku)
+3. Paste your API key and click **Test Connection**.
+4. Once verified, the key and active model are automatically saved locally into SQLite (`backend/pennywise.db`).
 
 ---
 
 ## Data Storage
 
-All data is stored locally:
-- Database: SQLite (`backend/pennywise.db`)
-- Receipts: Local directory (`backend/uploads/`)
+All data stays strictly local on your machine:
+- **Database**: SQLite at `backend/pennywise.db`
+- **Receipt Archives**: Saved locally in `backend/uploads/receipts/`
+- **ML Artifacts**: Pre-trained ensemble models in `backend/Model/models/`
 
 ---
 
