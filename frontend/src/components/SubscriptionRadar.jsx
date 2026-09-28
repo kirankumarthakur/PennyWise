@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Repeat, Calendar, CheckCircle2, AlertCircle, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
+import { apiFetch } from "../config/api";
 
 export default function SubscriptionRadar() {
   const [subscriptions, setSubscriptions] = useState([]);
@@ -9,7 +10,7 @@ export default function SubscriptionRadar() {
   const fetchSubscriptions = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/ai/insights");
+      const res = await apiFetch("/api/ai/insights");
       const data = await res.json();
       if (data.success && data.insights?.subscriptions) {
         setSubscriptions(data.insights.subscriptions);

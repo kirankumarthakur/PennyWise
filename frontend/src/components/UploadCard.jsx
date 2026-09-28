@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { UploadCloud, CheckCircle, AlertCircle, Calendar, Clock, FileText, Image, Edit3, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { getCurrentLocalDate, formatDisplayDate } from '../utils/dateUtils';
+import { apiFetch } from "../config/api";
 
 
 export default function UploadCard() {
@@ -77,7 +78,7 @@ export default function UploadCard() {
       const formData = new FormData();
       formData.append(file.type === 'application/pdf' ? 'pdf' : 'image', file);
 
-      const response = await fetch('http://localhost:5000/api/process-bill', {
+      const response = await apiFetch('/api/process-bill', {
         method: 'POST',
         body: formData
       });
@@ -179,7 +180,7 @@ export default function UploadCard() {
       };
       
       // Send to backend
-      const response = await fetch('http://localhost:5000/api/expenses', {
+      const response = await apiFetch('/api/expenses', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

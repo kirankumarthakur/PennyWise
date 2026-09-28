@@ -23,7 +23,7 @@ def clean_json_response(raw: str) -> dict[str, Any]:
 class AnthropicClient:
     """Official Anthropic Claude Client using anthropic SDK."""
 
-    def __init__(self, api_key: str, model: str = "claude-3-5-sonnet-latest"):
+    def __init__(self, api_key: str, model: str = "claude-haiku-5.5"):
         self.api_key = api_key
         self.model = model
         self.client = Anthropic(api_key=api_key)
@@ -135,4 +135,4 @@ class AnthropicClient:
                     return sorted(results, reverse=True)
         except Exception as e:
             logger.warning("Error fetching available Anthropic models: %s", e)
-        return ["claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-3-opus-latest"]
+        return ["claude-haiku-5.5", "claude-sonnet-5.5", "claude-opus-5.5", "claude-fable-5.1"]

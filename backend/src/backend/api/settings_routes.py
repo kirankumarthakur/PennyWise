@@ -1,50 +1,135 @@
-"""Settings API routes for managing AI provider keys and user preferences."""
+"""Settings API routes for managing in-memory session preferences and zero-persistence AI testing."""
 
+import time
 import logging
 from flask import Blueprint, jsonify, request, current_app
-
 from backend.services.llm.factory import LLMClientFactory
 
 logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api/settings")
 
+PUBLIC_MODELS = {
+    "gemini": [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-pro",
+    ],
+    "openai": [
+        "gpt-6-luna",
+        "gpt-6.1-sol",
+        "gpt-6-astra",
+        "o3-mini",
+        "gpt-4o",
+    ],
+    "anthropic": [
+        "claude-haiku-5.5",
+        "claude-sonnet-5.5",
+        "claude-opus-5.5",
+        "claude-fable-5.1",
+    ],
+}
+
+DEFAULT_MODELS = {
+    "gemini": "gemini-3.8-flash",
+    "openai": "gpt-6-luna",
+    "anthropic": "claude-haiku-5.5",
+}
+
 
 @settings_bp.route("", methods=["GET"])
 def get_settings():
-    """Retrieve public application settings with masked keys."""
-    settings_service = current_app.extensions["settings_service"]
-    return jsonify({"success": True, "settings": settings_service.get_public_settings()})
+    session_id = request.headers.get("X-Session-ID", "demo")
+    session_store = current_app.extensions["session_store"]
+    session = session_store.get_or_create(session_id)
+    prefs = session.get("settings", {})
+
+    return jsonify({
+        "success": True,
+        "settings": {
+            "is_demo": True,
+            "demo_notice": "PennyWise Live Demo runs with ephemeral in-memory sessions. API keys are kept in your browser memory and never written to server storage.",
+            "active_provider": prefs.get("active_provider", "gemini"),
+            "providers": {
+                "gemini": {
+                    "has_key": False,
+                    "model": prefs.get("gemini_model", DEFAULT_MODELS["gemini"]),
+                    "available_models": PUBLIC_MODELS["gemini"],
+                },
+                "openai": {
+                    "has_key": False,
+                    "model": prefs.get("openai_model", DEFAULT_MODELS["openai"]),
+                    "available_models": PUBLIC_MODELS["openai"],
+                },
+                "anthropic": {
+                    "has_key": False,
+                    "model": prefs.get("anthropic_model", DEFAULT_MODELS["anthropic"]),
+                    "available_models": PUBLIC_MODELS["anthropic"],
+                },
+            },
+            "monthly_budget": float(prefs.get("monthly_budget", 15000.0)),
+            "currency": prefs.get("currency", "INR"),
+        },
+    })
 
 
 @settings_bp.route("", methods=["POST"])
 def update_settings():
-    """Update active provider, API keys, models, and budget preferences."""
-    settings_service = current_app.extensions["settings_service"]
+    session_id = request.headers.get("X-Session-ID", "demo")
+    session_store = current_app.extensions["session_store"]
+    session = session_store.get_or_create(session_id)
+    prefs = session.setdefault("settings", {})
+
     payload = request.get_json() or {}
-    updated = settings_service.update_settings(payload)
-    return jsonify({"success": True, "settings": updated})
+
+    if "active_provider" in payload:
+        provider = str(payload["active_provider"]).lower().strip()
+        if provider in PUBLIC_MODELS:
+            prefs["active_provider"] = provider
+
+    for p in ("gemini", "openai", "anthropic"):
+        m_key = f"{p}_model"
+        if m_key in payload and payload[m_key]:
+            prefs[m_key] = str(payload[m_key]).strip()[:64]
+
+    if "monthly_budget" in payload:
+        try:
+            b = float(payload["monthly_budget"])
+            if 0 < b < 100_000_000:
+                prefs["monthly_budget"] = b
+        except (ValueError, TypeError):
+            pass
+
+    if "currency" in payload and payload["currency"]:
+        cur = str(payload["currency"]).strip().upper()[:5]
+        if cur.isalpha():
+            prefs["currency"] = cur
+
+    return get_settings()
 
 
 @settings_bp.route("/test-key", methods=["POST"])
 def test_key():
-    """Test and validate an API key against the specified provider."""
-    import time
-
     payload = request.get_json() or {}
-    provider = payload.get("provider", "gemini").lower()
-    api_key = payload.get("api_key", "").strip()
-    model = payload.get("model")
-
-    settings_service = current_app.extensions["settings_service"]
-    if not api_key or api_key.startswith("...") or "..." in api_key:
-        api_key = settings_service.get_api_key(provider)
+    api_key = (
+        request.headers.get("X-AI-Key")
+        or payload.get("api_key", "")
+    ).strip()
+    provider = (
+        request.headers.get("X-AI-Provider")
+        or payload.get("provider", "gemini")
+    ).lower().strip()
+    model = (
+        request.headers.get("X-AI-Model")
+        or payload.get("model")
+    )
 
     if not api_key:
         return jsonify({
             "success": False,
             "connected": False,
-            "error": f"No API key provided for {provider}. Please enter a valid API key.",
+            "error": "No API key provided. Please enter your provider API key.",
         }), 400
 
     client = LLMClientFactory.create_client(provider=provider, api_key=api_key, model=model)
@@ -62,12 +147,6 @@ def test_key():
     active_model = getattr(client, "model", model)
 
     if is_valid:
-        if api_key and "..." not in api_key:
-            settings_service.update_settings({
-                "active_provider": provider,
-                f"{provider}_api_key": api_key,
-                f"{provider}_model": active_model,
-            })
         available_models = client.list_available_models()
         return jsonify({
             "success": True,
@@ -76,9 +155,7 @@ def test_key():
             "provider": provider,
             "model": active_model,
             "available_models": available_models,
-            "masked_key": settings_service._mask_key(api_key),
-            "settings": settings_service.get_public_settings(),
-            "message": f"Successfully connected to {provider.title()} ({active_model}) in {latency_ms}ms.",
+            "message": f"Successfully verified {provider.title()} ({active_model}) in {latency_ms}ms.",
         })
     else:
         return jsonify({
@@ -87,33 +164,29 @@ def test_key():
             "latency_ms": latency_ms,
             "provider": provider,
             "model": active_model,
-            "error": detail or f"Failed to authenticate with {provider.title()}. Please verify your API key and model selection.",
+            "error": detail or f"Authentication failed with {provider.title()}.",
         }), 400
 
 
 @settings_bp.route("/models", methods=["POST", "GET"])
 def fetch_provider_models():
-    """Fetch live available models from provider API using provided or saved credentials."""
     if request.method == "POST":
         payload = request.get_json() or {}
-        provider = payload.get("provider", "gemini").lower()
-        api_key = payload.get("api_key", "").strip()
+        api_key = (request.headers.get("X-AI-Key") or payload.get("api_key", "")).strip()
+        provider = (request.headers.get("X-AI-Provider") or payload.get("provider", "gemini")).lower().strip()
     else:
-        provider = request.args.get("provider", "gemini").lower()
-        api_key = request.args.get("api_key", "").strip()
+        api_key = (request.headers.get("X-AI-Key") or request.args.get("api_key", "")).strip()
+        provider = (request.headers.get("X-AI-Provider") or request.args.get("provider", "gemini")).lower().strip()
 
-    settings_service = current_app.extensions["settings_service"]
-    if not api_key or api_key.startswith("...") or "..." in api_key:
-        api_key = settings_service.get_api_key(provider)
-
-    baseline_models = settings_service.get_available_models(provider)
+    baseline_models = PUBLIC_MODELS.get(provider, [])
 
     if not api_key:
         return jsonify({
-            "success": False,
-            "error": f"Please enter an API key for {provider.title()} to query live available models.",
+            "success": True,
+            "provider": provider,
             "models": baseline_models,
-        }), 400
+            "default_model": DEFAULT_MODELS.get(provider, ""),
+        })
 
     client = LLMClientFactory.create_client(provider=provider, api_key=api_key)
     if not client:
@@ -125,7 +198,7 @@ def fetch_provider_models():
 
     try:
         live_models = client.list_available_models()
-        default_model = live_models[0] if live_models else (baseline_models[0] if baseline_models else "")
+        default_model = live_models[0] if live_models else DEFAULT_MODELS.get(provider, "")
         return jsonify({
             "success": True,
             "provider": provider,
@@ -135,6 +208,6 @@ def fetch_provider_models():
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": f"Failed to fetch models from {provider.title()}: {str(e)}",
+            "error": f"Could not query live models: {str(e)}",
             "models": baseline_models,
         }), 500

@@ -23,7 +23,7 @@ def clean_json_response(raw: str) -> dict[str, Any]:
 class OpenAIClient:
     """Official OpenAI Client using openai SDK."""
 
-    def __init__(self, api_key: str, model: str = "gpt-4o-mini"):
+    def __init__(self, api_key: str, model: str = "gpt-6-luna"):
         self.api_key = api_key
         self.model = model
         self.client = OpenAI(api_key=api_key)
@@ -132,4 +132,4 @@ class OpenAIClient:
                 return results
         except Exception as e:
             logger.warning("Error fetching available OpenAI models: %s", e)
-        return ["gpt-4o", "gpt-4o-mini", "o1", "o1-mini"]
+        return ["gpt-6-luna", "gpt-6.1-sol", "gpt-6-astra", "o3-mini", "gpt-4o"]

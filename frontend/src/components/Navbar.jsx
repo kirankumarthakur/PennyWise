@@ -1,19 +1,22 @@
 import React, { useState, useEffect } from "react";
-import { UserCircle, Plus, Wallet, Sun, Moon, Sparkles } from "lucide-react";
+import { UserCircle, Plus, Wallet, Sun, Moon, Sparkles, RotateCcw } from "lucide-react";
+import { apiFetch } from "../config/api";
+import { useAiKey } from "../context/AiKeyContext";
 
-export default function Navbar({ onOpenAddExpense, darkMode, onToggleDarkMode, onNavigateSettings }) {
+export default function Navbar({ onOpenAddExpense, darkMode, onToggleDarkMode, onNavigateSettings, onResetDemo }) {
+  const { hasKey, provider } = useAiKey();
   const [providerInfo, setProviderInfo] = useState({ provider: "gemini", hasKey: false });
 
   const fetchAIStatus = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/settings");
+      const res = await apiFetch("/api/settings");
       const data = await res.json();
       if (data.success && data.settings) {
         const p = data.settings.active_provider;
-        const hasKey = data.settings.providers?.[p]?.has_key || false;
         setProviderInfo({ provider: p, hasKey });
       }
     } catch (err) {
+      // silent fallback
     }
   };
 
@@ -21,7 +24,10 @@ export default function Navbar({ onOpenAddExpense, darkMode, onToggleDarkMode, o
     fetchAIStatus();
     window.addEventListener("settingsUpdated", fetchAIStatus);
     return () => window.removeEventListener("settingsUpdated", fetchAIStatus);
-  }, []);
+  }, [hasKey]);
+
+  const activeHasKey = hasKey || providerInfo.hasKey;
+  const activeProvider = provider || providerInfo.provider;
 
   return (
     <nav className="flex items-center justify-between h-16 px-6 bg-white dark:bg-gray-800 shadow-sm border-b border-gray-100 dark:border-gray-700 transition-colors">
@@ -29,21 +35,37 @@ export default function Navbar({ onOpenAddExpense, darkMode, onToggleDarkMode, o
         <div className="p-1.5 bg-blue-600 text-white rounded-lg shadow-sm">
           <Wallet size={20} />
         </div>
-        <h1 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">PennyWise</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-xl font-black tracking-tight text-gray-900 dark:text-white">PennyWise</h1>
+          <span className="px-2 py-0.5 text-[11px] font-bold rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+            Demo
+          </span>
+        </div>
       </div>
       
       <div className="flex items-center gap-3">
+        {onResetDemo && (
+          <button
+            onClick={onResetDemo}
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+            title="Reset demo session to initial sample transactions"
+          >
+            <RotateCcw size={13} />
+            <span>Reset Demo</span>
+          </button>
+        )}
+
         <button
           onClick={onNavigateSettings}
           className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition border ${
-            providerInfo.hasKey
+            activeHasKey
               ? "bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800 hover:bg-purple-100 dark:hover:bg-purple-900/60"
               : "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/60"
           }`}
-          title="Click to manage AI Provider & Keys in Settings"
+          title="Click to manage AI Provider & Memory API Keys in Settings"
         >
-          <Sparkles size={13} className={providerInfo.hasKey ? "text-purple-600 dark:text-purple-400" : "text-amber-500"} />
-          <span className="capitalize">{providerInfo.provider} {providerInfo.hasKey ? "Active" : "(Key Needed)"}</span>
+          <Sparkles size={13} className={activeHasKey ? "text-purple-600 dark:text-purple-400" : "text-amber-500"} />
+          <span className="capitalize">{activeProvider} {activeHasKey ? "Active" : "(Key Needed)"}</span>
         </button>
 
         {onOpenAddExpense && (

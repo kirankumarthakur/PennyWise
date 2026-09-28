@@ -1,59 +1,86 @@
 import React, { useState, useEffect } from "react";
-import { Sparkles, Key, CheckCircle2, AlertCircle, Shield, RefreshCw, Cpu, Wallet, Eye, EyeOff } from "lucide-react";
+import { Sparkles, Key, CheckCircle2, AlertCircle, Shield, RefreshCw, Cpu, Wallet, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
+import { apiFetch } from "../config/api";
+import { useAiKey } from "../context/AiKeyContext";
 
-export default function Settings() {
-  const [activeTab, setActiveTab] = useState("ai"); // 'ai' | 'preferences' | 'profile'
+const PUBLIC_MODELS = {
+  gemini: [
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
+    "gemini-3.1-pro",
+  ],
+  openai: [
+    "gpt-6-luna",
+    "gpt-6.1-sol",
+    "gpt-6-astra",
+    "o3-mini",
+    "gpt-4o",
+  ],
+  anthropic: [
+    "claude-haiku-5.5",
+    "claude-sonnet-5.5",
+    "claude-opus-5.5",
+    "claude-fable-5.1",
+  ],
+};
+
+const DEFAULT_MODELS = {
+  gemini: "gemini-3.8-flash",
+  openai: "gpt-6-luna",
+  anthropic: "claude-haiku-5.5",
+};
+
+export default function Settings({ onResetDemo }) {
+  const { apiKey: inMemoryKey, provider: inMemoryProvider, setApiKey: setContextKey, setProvider: setContextProvider, removeKey: removeContextKey } = useAiKey();
+
+  const [activeTab, setActiveTab] = useState("ai"); // 'ai' | 'preferences'
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [testingProvider, setTestingProvider] = useState(null);
   const [testResult, setTestResult] = useState(null);
-  const [providerModels, setProviderModels] = useState({ gemini: [], openai: [], anthropic: [] });
+  const [providerModels, setProviderModels] = useState(PUBLIC_MODELS);
   const [fetchingModelsProvider, setFetchingModelsProvider] = useState(null);
   const [modelsNotice, setModelsNotice] = useState(null);
 
   // Form states
-  const [activeProvider, setActiveProvider] = useState("gemini");
-  const [apiKeys, setApiKeys] = useState({ gemini: "", openai: "", anthropic: "" });
-  const [models, setModels] = useState({ gemini: "gemini-3.8-flash", openai: "gpt-4o", anthropic: "claude-3-5-sonnet-latest" });
+  const [activeProvider, setActiveProvider] = useState(inMemoryProvider || "gemini");
+  const [apiKeys, setApiKeys] = useState({
+    gemini: inMemoryProvider === "gemini" ? inMemoryKey : "",
+    openai: inMemoryProvider === "openai" ? inMemoryKey : "",
+    anthropic: inMemoryProvider === "anthropic" ? inMemoryKey : "",
+  });
+  const [models, setModels] = useState(DEFAULT_MODELS);
   const [monthlyBudget, setMonthlyBudget] = useState(15000);
   const [currency, setCurrency] = useState("INR");
   const [showKeys, setShowKeys] = useState({ gemini: false, openai: false, anthropic: false });
-
-  // User Profile State
-  const [username, setUsername] = useState("John Doe");
-  const [email, setEmail] = useState("john@example.com");
+  const [resettingDemo, setResettingDemo] = useState(false);
 
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/settings");
+      const res = await apiFetch("/api/settings");
       const data = await res.json();
       if (data.success && data.settings) {
         const s = data.settings;
         setSettings(s);
-        setActiveProvider(s.active_provider || "gemini");
+        setActiveProvider(inMemoryProvider || s.active_provider || "gemini");
         setMonthlyBudget(s.monthly_budget || 15000);
         setCurrency(s.currency || "INR");
 
         setProviderModels({
-          gemini: s.providers?.gemini?.available_models || [],
-          openai: s.providers?.openai?.available_models || [],
-          anthropic: s.providers?.anthropic?.available_models || [],
+          gemini: s.providers?.gemini?.available_models || PUBLIC_MODELS.gemini,
+          openai: s.providers?.openai?.available_models || PUBLIC_MODELS.openai,
+          anthropic: s.providers?.anthropic?.available_models || PUBLIC_MODELS.anthropic,
         });
 
         setModels({
-          gemini: s.providers?.gemini?.model || "gemini-3.8-flash",
-          openai: s.providers?.openai?.model || "gpt-4o",
-          anthropic: s.providers?.anthropic?.model || "claude-3-5-sonnet-latest"
-        });
-
-        setApiKeys({
-          gemini: s.providers?.gemini?.masked_key || "",
-          openai: s.providers?.openai?.masked_key || "",
-          anthropic: s.providers?.anthropic?.masked_key || ""
+          gemini: s.providers?.gemini?.model || DEFAULT_MODELS.gemini,
+          openai: s.providers?.openai?.model || DEFAULT_MODELS.openai,
+          anthropic: s.providers?.anthropic?.model || DEFAULT_MODELS.anthropic,
         });
       }
     } catch (err) {
@@ -67,6 +94,21 @@ export default function Settings() {
     fetchSettings();
   }, []);
 
+  const handleKeyChange = (provider, value) => {
+    setApiKeys((prev) => ({ ...prev, [provider]: value }));
+    if (activeProvider === provider) {
+      setContextKey(value);
+    }
+  };
+
+  const handleRemoveKey = (provider) => {
+    setApiKeys((prev) => ({ ...prev, [provider]: "" }));
+    if (activeProvider === provider) {
+      removeContextKey();
+    }
+    setTestResult(null);
+  };
+
   const handleSaveSettings = async () => {
     setSaving(true);
     setSaveSuccess(false);
@@ -78,43 +120,33 @@ export default function Settings() {
       openai_model: models.openai,
       anthropic_model: models.anthropic,
       monthly_budget: monthlyBudget,
-      currency: currency
+      currency: currency,
     };
 
-    // Only send key if user actually typed a new one (not masked)
-    if (apiKeys.gemini && !apiKeys.gemini.includes("...")) {
-      payload.gemini_api_key = apiKeys.gemini;
-    }
-    if (apiKeys.openai && !apiKeys.openai.includes("...")) {
-      payload.openai_api_key = apiKeys.openai;
-    }
-    if (apiKeys.anthropic && !apiKeys.anthropic.includes("...")) {
-      payload.anthropic_api_key = apiKeys.anthropic;
+    // Keep active key in React memory context
+    const currentKey = apiKeys[activeProvider];
+    if (currentKey) {
+      setContextKey(currentKey);
+      setContextProvider(activeProvider);
     }
 
     try {
-      const res = await fetch("http://localhost:5000/api/settings", {
+      const res = await apiFetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
       if (data.success) {
         setSaveSuccess(true);
         if (data.settings) {
-          const s = data.settings;
-          setSettings(s);
-          setApiKeys({
-            gemini: s.providers?.gemini?.masked_key || "",
-            openai: s.providers?.openai?.masked_key || "",
-            anthropic: s.providers?.anthropic?.masked_key || ""
-          });
+          setSettings(data.settings);
         }
         window.dispatchEvent(new CustomEvent("settingsUpdated"));
         setTimeout(() => setSaveSuccess(false), 2500);
       }
     } catch (err) {
-      alert("Failed to save settings: " + err.message);
+      alert("Failed to save session settings: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -127,48 +159,50 @@ export default function Settings() {
     const key = apiKeys[provider];
     const model = models[provider];
 
-    try {
-      const res = await fetch("http://localhost:5000/api/settings/test-key", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider,
-          api_key: key && key.includes("...") ? "" : key,
-          model
-        })
-      });
-      const data = await res.json();
+    if (!key || !key.trim()) {
       setTestResult({
         provider,
-        success: Boolean(data.success && data.connected),
+        success: false,
+        message: `Please enter an API key for ${provider.toUpperCase()} first.`,
+      });
+      setTestingProvider(null);
+      return;
+    }
+
+    try {
+      const res = await apiFetch("/api/settings/test-key", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-AI-Key": key.trim(),
+          "X-AI-Provider": provider,
+          "X-AI-Model": model,
+        },
+        body: JSON.stringify({
+          provider,
+          api_key: key.trim(),
+          model,
+        }),
+      });
+      const data = await res.json();
+      const isOk = Boolean(data.success && data.connected);
+
+      setTestResult({
+        provider,
+        success: isOk,
         latency_ms: data.latency_ms,
         model: data.model || model,
-        message: data.message || data.error || (data.connected ? "Connection verified and saved." : "Authentication failed.")
+        message: data.message || data.error || (isOk ? "Connection verified successfully in memory." : "Authentication failed."),
       });
 
-      if (data.available_models && data.available_models.length > 0) {
-        setProviderModels((prev) => ({
-          ...prev,
-          [provider]: data.available_models,
-        }));
-      }
-
-      if (data.model) {
-        setModels((prev) => ({
-          ...prev,
-          [provider]: data.model,
-        }));
-      }
-
-      if (data.connected) {
+      if (isOk) {
         setActiveProvider(provider);
-        if (data.settings) {
-          setSettings(data.settings);
-        }
-        if (data.masked_key) {
-          setApiKeys((prev) => ({
+        setContextKey(key.trim());
+        setContextProvider(provider);
+        if (data.available_models && data.available_models.length > 0) {
+          setProviderModels((prev) => ({
             ...prev,
-            [provider]: data.masked_key,
+            [provider]: data.available_models,
           }));
         }
         window.dispatchEvent(new CustomEvent("settingsUpdated"));
@@ -177,7 +211,7 @@ export default function Settings() {
       setTestResult({
         provider,
         success: false,
-        message: "Failed to connect to backend service. Please check if the server is running."
+        message: "Failed to connect to backend: " + err.message,
       });
     } finally {
       setTestingProvider(null);
@@ -190,12 +224,16 @@ export default function Settings() {
 
     const key = apiKeys[provider];
     try {
-      const res = await fetch("http://localhost:5000/api/settings/models", {
+      const res = await apiFetch("/api/settings/models", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-AI-Key": key ? key.trim() : "",
+          "X-AI-Provider": provider,
+        },
         body: JSON.stringify({
           provider,
-          api_key: key && key.includes("...") ? "" : key,
+          api_key: key ? key.trim() : "",
         }),
       });
       const data = await res.json();
@@ -213,7 +251,7 @@ export default function Settings() {
         setModelsNotice({
           provider,
           type: "success",
-          message: `Retrieved ${data.models.length} available models from ${provider.toUpperCase()}.`,
+          message: `Retrieved ${data.models.length} live models from ${provider.toUpperCase()}.`,
         });
         setTimeout(() => setModelsNotice(null), 4000);
       } else {
@@ -234,12 +272,41 @@ export default function Settings() {
     }
   };
 
+  const triggerResetDemo = async () => {
+    if (onResetDemo) {
+      onResetDemo();
+      return;
+    }
+    if (!window.confirm("Reset your session to default fictional sample transactions?")) return;
+    setResettingDemo(true);
+    try {
+      const res = await apiFetch("/api/expenses/reset-demo", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        window.dispatchEvent(new CustomEvent("expenseAdded"));
+        window.dispatchEvent(new CustomEvent("settingsUpdated"));
+        alert("Demo session reset to default sample expenses.");
+      }
+    } catch (err) {
+      alert("Failed to reset demo: " + err.message);
+    } finally {
+      setResettingDemo(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">Settings & Integrations</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Configure Multi-Provider AI engines, financial preferences, and profile</p>
+          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
+            <span>Settings & BYOK Security</span>
+            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+              Demo Mode
+            </span>
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400">
+            Bring-Your-Own-Key (BYOK) memory security, model selection, and ephemeral session preferences
+          </p>
         </div>
 
         <button
@@ -250,6 +317,16 @@ export default function Settings() {
           {saving ? <RefreshCw size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
           <span>{saveSuccess ? "Saved Successfully!" : "Save Changes"}</span>
         </button>
+      </div>
+
+      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-start gap-3">
+        <Shield size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+        <div className="text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
+          <p className="font-bold">Zero Storage Persistence Guarantee</p>
+          <p className="opacity-90 leading-relaxed">
+            API keys are maintained strictly in browser React memory and are <strong>never written to SQLite, server files, or browser localStorage</strong>. Keys are transmitted only over HTTPS headers directly for AI inference and discarded immediately.
+          </p>
+        </div>
       </div>
 
       <div className="flex border-b border-gray-200 dark:border-gray-700">
@@ -273,7 +350,7 @@ export default function Settings() {
           }`}
         >
           <Wallet size={15} />
-          <span>Budget & Currency</span>
+          <span>Budget, Currency & Demo Session</span>
         </button>
       </div>
 
@@ -282,12 +359,18 @@ export default function Settings() {
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm space-y-4">
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Active AI Engine</h3>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Choose which provider powers receipt scanning, financial insights, and copilot chat</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Select your preferred LLM provider for receipt scanning, financial insights, and copilot chat
+              </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div
-                onClick={() => setActiveProvider("gemini")}
+                onClick={() => {
+                  setActiveProvider("gemini");
+                  if (apiKeys.gemini) setContextKey(apiKeys.gemini);
+                  setContextProvider("gemini");
+                }}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
                   activeProvider === "gemini"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
@@ -302,17 +385,21 @@ export default function Settings() {
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official google-genai SDK. Real-time multimodal vision, high-speed receipt parsing, and insights with Gemini 3.8 Flash, 2.5 Flash, and Pro.
+                    Official google-genai SDK. Real-time multimodal vision, high-speed receipt extraction, and deep insights with Gemini 3.8 Flash and 3.7 Flash.
                   </p>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>Gemini 3.8 & 2.5 Flash</span>
+                  <span>Gemini 3.8 / 3.7 Flash</span>
                   {activeProvider === "gemini" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveProvider("openai")}
+                onClick={() => {
+                  setActiveProvider("openai");
+                  if (apiKeys.openai) setContextKey(apiKeys.openai);
+                  setContextProvider("openai");
+                }}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
                   activeProvider === "openai"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
@@ -327,17 +414,21 @@ export default function Settings() {
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official openai SDK. Multimodal analysis, reasoning, and structured receipt data extraction with GPT-4o, GPT-4o-mini, and o1.
+                    Official openai SDK. Multimodal analysis, reasoning, and structured receipt data extraction with GPT-6 Luna, GPT-6.1 Sol, and o3-mini.
                   </p>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>GPT-4o & GPT-4o-mini</span>
+                  <span>GPT-6 Luna & Sol</span>
                   {activeProvider === "openai" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
                 </div>
               </div>
 
               <div
-                onClick={() => setActiveProvider("anthropic")}
+                onClick={() => {
+                  setActiveProvider("anthropic");
+                  if (apiKeys.anthropic) setContextKey(apiKeys.anthropic);
+                  setContextProvider("anthropic");
+                }}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
                   activeProvider === "anthropic"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
@@ -352,11 +443,11 @@ export default function Settings() {
                     </span>
                   </div>
                   <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official anthropic SDK. Deep financial reasoning, anomaly explanation, and advisory with Claude 3.5 Sonnet and Claude 3.5 Haiku.
+                    Official anthropic SDK. Deep financial reasoning, anomaly explanation, and advisory with Claude Haiku 5.5 and Claude Sonnet 5.5.
                   </p>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>Claude 3.5 Sonnet & Haiku</span>
+                  <span>Claude Haiku & Sonnet 5.5</span>
                   {activeProvider === "anthropic" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
                 </div>
               </div>
@@ -368,17 +459,15 @@ export default function Settings() {
               const isActive = activeProvider === provider;
               const title = provider === "gemini" ? "Google Gemini" : provider === "openai" ? "OpenAI" : "Anthropic Claude";
               const keyPlaceholder = provider === "gemini" ? "AIzaSy..." : provider === "openai" ? "sk-proj-..." : "sk-ant-...";
-              const modelOptions = providerModels[provider]?.length > 0
-                ? providerModels[provider]
-                : (settings?.providers?.[provider]?.available_models || []);
+              const currentKey = apiKeys[provider];
+              const hasCurrentKey = Boolean(currentKey && currentKey.trim().length > 0);
+              const modelOptions = providerModels[provider]?.length > 0 ? providerModels[provider] : PUBLIC_MODELS[provider];
 
               return (
                 <div
                   key={provider}
                   className={`bg-white dark:bg-gray-800 rounded-2xl p-5 border transition ${
-                    isActive
-                      ? "border-blue-300 dark:border-blue-700 shadow-sm"
-                      : "border-gray-100 dark:border-gray-700"
+                    isActive ? "border-blue-300 dark:border-blue-700 shadow-sm" : "border-gray-100 dark:border-gray-700"
                   }`}
                 >
                   <div className="flex items-center justify-between mb-3">
@@ -387,19 +476,30 @@ export default function Settings() {
                         <Key size={14} />
                       </div>
                       <h4 className="font-bold text-xs text-gray-900 dark:text-white">{title} Configuration</h4>
-                      {settings?.providers?.[provider]?.has_key && (
+                      {hasCurrentKey && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                          <CheckCircle2 size={11} /> Saved
+                          <CheckCircle2 size={11} /> Key in Memory
                         </span>
                       )}
                     </div>
 
                     <div className="flex items-center gap-2">
+                      {hasCurrentKey && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveKey(provider)}
+                          className="flex items-center gap-1 px-2.5 py-1 text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-[11px] font-semibold rounded-lg transition"
+                          title="Clear this API key from browser memory"
+                        >
+                          <Trash2 size={12} />
+                          <span>Remove Key</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => handleTestKey(provider)}
-                        disabled={testingProvider === provider}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[11px] font-semibold rounded-lg transition disabled:opacity-50"
+                        disabled={testingProvider === provider || !hasCurrentKey}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 text-[11px] font-semibold rounded-lg transition disabled:opacity-40"
                       >
                         {testingProvider === provider ? (
                           <>
@@ -413,7 +513,6 @@ export default function Settings() {
                     </div>
                   </div>
 
-                  {/* Test Result Message Banner */}
                   {testResult && testResult.provider === provider && (
                     <div
                       className={`p-3.5 rounded-xl mb-3 text-xs border transition ${
@@ -451,13 +550,13 @@ export default function Settings() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     <div>
                       <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                        API Key
+                        API Key (Kept in Browser Memory Only)
                       </label>
                       <div className="relative">
                         <input
                           type={showKeys[provider] ? "text" : "password"}
-                          value={apiKeys[provider]}
-                          onChange={(e) => setApiKeys({ ...apiKeys, [provider]: e.target.value })}
+                          value={currentKey}
+                          onChange={(e) => handleKeyChange(provider, e.target.value)}
                           placeholder={keyPlaceholder}
                           className="w-full px-3 py-2 pr-9 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
@@ -465,10 +564,12 @@ export default function Settings() {
                           type="button"
                           onClick={() => setShowKeys({ ...showKeys, [provider]: !showKeys[provider] })}
                           className="absolute right-2.5 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                          title={showKeys[provider] ? "Hide API key" : "Show API key"}
                         >
                           {showKeys[provider] ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                       </div>
+                      <p className="text-[10px] text-gray-400 mt-1">Never saved to server storage or disk. Discarded on page refresh.</p>
                     </div>
 
                     <div>
@@ -481,10 +582,10 @@ export default function Settings() {
                           onClick={() => fetchLiveModels(provider)}
                           disabled={fetchingModelsProvider === provider}
                           className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition disabled:opacity-50"
-                          title="Fetch real-time available models from provider API"
+                          title="Query live models from provider API"
                         >
                           <RefreshCw size={11} className={fetchingModelsProvider === provider ? "animate-spin" : ""} />
-                          <span>{fetchingModelsProvider === provider ? "Fetching..." : "Fetch Models"}</span>
+                          <span>{fetchingModelsProvider === provider ? "Fetching..." : "Fetch Live Models"}</span>
                         </button>
                       </div>
 
@@ -521,7 +622,7 @@ export default function Settings() {
                           type="text"
                           value={models[provider] === "custom" ? "" : models[provider]}
                           onChange={(e) => setModels({ ...models, [provider]: e.target.value })}
-                          placeholder="e.g. gemini-2.5-flash, gpt-4o, claude-3-5-sonnet-latest"
+                          placeholder="e.g. gemini-3.8-flash, gpt-6-luna, claude-haiku-5.5"
                           className="mt-2 w-full px-3 py-1.5 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       )}
@@ -560,7 +661,7 @@ export default function Settings() {
 
               <div>
                 <label className="block font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                  Base Currency
+                  Base Display Currency
                 </label>
                 <select
                   value={currency}
@@ -573,6 +674,31 @@ export default function Settings() {
                   <option value="GBP">GBP (£) - British Pound</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                  <span>Demo Session Isolation</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
+                    In-Memory SQLite
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Your session runs entirely in server memory and is completely isolated from other visitors. You can reset to clean fictional sample data at any time.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={triggerResetDemo}
+                disabled={resettingDemo}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50"
+              >
+                <RotateCcw size={13} className={resettingDemo ? "animate-spin" : ""} />
+                <span>{resettingDemo ? "Resetting..." : "Reset Demo Data"}</span>
+              </button>
             </div>
           </div>
         </motion.div>

@@ -5,7 +5,7 @@ from flask import Flask, jsonify
 from flask_cors import CORS
 
 from backend.config import AppConfig, configure_logging
-from backend.repositories.sqlite import SqliteExpenseRepository
+
 from backend.extractors.ocr import TesseractOcrEngine
 from backend.extractors.document_parser import DocumentParser
 from backend.extractors.date_extractor import DateExtractor
@@ -13,8 +13,6 @@ from backend.extractors.amount_extractor import AmountExtractor
 from backend.extractors.vendor_extractor import VendorExtractor
 from backend.services.categorization_service import CategorizationService
 from backend.services.bill_processing_service import BillProcessingService
-from backend.services.expense_service import ExpenseService
-from backend.services.settings_service import SettingsService
 from backend.services.ai_financial_service import AIFinancialService
 from backend.api.expenses_routes import expenses_bp
 from backend.api.bill_routes import bill_bp
@@ -31,13 +29,23 @@ def create_app(config: type[AppConfig] = AppConfig) -> Flask:
     configure_logging(config.LOG_LEVEL)
 
     app = Flask(__name__)
-    CORS(app)
+    app.config["MAX_CONTENT_LENGTH"] = config.MAX_CONTENT_LENGTH
+    CORS(
+        app,
+        origins=config.CORS_ORIGINS,
+        supports_credentials=True,
+        allow_headers=["Content-Type", "X-Session-ID", "X-AI-Key", "X-AI-Provider", "X-AI-Model"],
+    )
 
-    # Instantiate infrastructure and persistence layer (SQLite default)
-    repo = SqliteExpenseRepository(db_path=config.SQLITE_DB_PATH)
-    expense_service = ExpenseService(repo)
-    settings_service = SettingsService(repo)
-    ai_service = AIFinancialService(settings_service=settings_service, expense_repo=repo)
+    from backend.repositories.in_memory_session_store import InMemorySessionStore
+
+    session_store = InMemorySessionStore(
+        max_sessions=config.MAX_SESSIONS,
+        ttl_seconds=config.SESSION_TTL_SECONDS,
+        max_expenses_per_session=config.MAX_EXPENSES_PER_SESSION,
+        max_receipts_per_session=config.MAX_RECEIPTS_PER_SESSION,
+    )
+    ai_service = AIFinancialService(session_store=session_store)
 
     ocr_engine = TesseractOcrEngine()
     document_parser = DocumentParser(ocr_engine)
@@ -60,21 +68,21 @@ def create_app(config: type[AppConfig] = AppConfig) -> Flask:
         categorization_service=categorization_service,
     )
 
-    # Register services on application extensions
-    app.extensions["expense_repo"] = repo
-    app.extensions["expense_service"] = expense_service
-    app.extensions["settings_service"] = settings_service
+    app.extensions["session_store"] = session_store
     app.extensions["ai_service"] = ai_service
     app.extensions["categorization_service"] = categorization_service
     app.extensions["bill_processor"] = bill_processor
 
-    # Register API blueprints
     app.register_blueprint(expenses_bp)
     app.register_blueprint(bill_bp)
     app.register_blueprint(analytics_bp)
     app.register_blueprint(health_bp)
     app.register_blueprint(settings_bp)
     app.register_blueprint(ai_bp)
+
+    @app.errorhandler(413)
+    def handle_payload_too_large(error):
+        return jsonify({"error": "Upload exceeds 10 MB limit.", "success": False}), 413
 
     @app.errorhandler(404)
     def handle_not_found(error):
@@ -85,7 +93,7 @@ def create_app(config: type[AppConfig] = AppConfig) -> Flask:
         logger.error("Internal Server Error: %s", error, exc_info=True)
         return jsonify({"error": "Internal server error", "success": False}), 500
 
-    logger.info("Initialized PennyWise backend application with Multi-Provider AI.")
+    logger.info("Initialized PennyWise Live Demo backend with ephemeral in-memory session isolation.")
     return app
 
 

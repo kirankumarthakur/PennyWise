@@ -34,7 +34,7 @@ class LLMClientFactory:
                 model_name = model or "gpt-6-luna"
                 return OpenAIClient(api_key=api_key, model=model_name)
             elif provider == "anthropic":
-                model_name = model or "claude-sonnet-5"
+                model_name = model or "claude-haiku-5.5"
                 return AnthropicClient(api_key=api_key, model=model_name)
             else:
                 logger.warning("Unsupported LLM provider requested: %s", provider)

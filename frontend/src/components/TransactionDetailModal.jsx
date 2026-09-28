@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { X, Calendar, Tag, Trash2, Receipt, ExternalLink, Building, DollarSign } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { API_BASE_URL } from "../config/api";
 
 export default function TransactionDetailModal({ expense, isOpen, onClose, onDelete }) {
   const [imageZoom, setImageZoom] = useState(false);
@@ -11,7 +12,7 @@ export default function TransactionDetailModal({ expense, isOpen, onClose, onDel
   const receiptSrc = expense.receipt_url
     ? expense.receipt_url.startsWith("http")
       ? expense.receipt_url
-      : `http://localhost:5000${expense.receipt_url}`
+      : `${API_BASE_URL}${expense.receipt_url}`
     : null;
 
   return (

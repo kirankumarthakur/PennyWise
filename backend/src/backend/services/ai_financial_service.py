@@ -4,13 +4,14 @@ import calendar
 import datetime
 import json
 import logging
+import math
 import re
-from typing import Any, Optional
+from typing import Any, Optional, List
 
+from backend.config import AppConfig
 from backend.models.expense import Expense
 from backend.models.bill import BillExtractionResult
 from backend.services.llm.factory import LLMClientFactory
-from backend.services.settings_service import SettingsService
 
 logger = logging.getLogger(__name__)
 
@@ -31,17 +32,42 @@ STANDARD_CATEGORIES = [
 class AIFinancialService:
     """Orchestrates LLM-powered financial intelligence, parsing, analysis, and chat."""
 
-    def __init__(self, settings_service: SettingsService, expense_repo):
-        self.settings_service = settings_service
-        self.repo = expense_repo
+    def __init__(self, session_store=None):
+        self.session_store = session_store
 
-    def _get_client(self):
-        """Retrieve active LLM client or None if no valid key is configured."""
-        return LLMClientFactory.get_active_client(self.settings_service)
+    def _get_client(
+        self,
+        api_key: Optional[str] = None,
+        provider: Optional[str] = None,
+        model: Optional[str] = None,
+    ):
+        """Retrieve active LLM client or None if no valid key is provided."""
+        if not api_key or not api_key.strip():
+            return None
+        return LLMClientFactory.create_client(
+            provider=provider or "gemini",
+            api_key=api_key.strip(),
+            model=model,
+        )
 
-    def parse_unstructured_expense(self, text: str) -> dict[str, Any]:
+    def _to_inr(self, amount: float, currency: str = "INR") -> float:
+        """Convert amount to INR using configured exchange rates."""
+        if not math.isfinite(amount):
+            return 0.0
+        cur = (currency or "INR").upper().strip()
+        rate = AppConfig.EXCHANGE_RATES.get(cur, 1.0)
+        converted = amount * rate
+        return converted if math.isfinite(converted) else 0.0
+
+    def parse_unstructured_expense(
+        self,
+        text: str,
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Parse raw SMS text, bill snippets, or natural language notes into transaction fields."""
-        client = self._get_client()
+        client = self._get_client(api_key, provider, model)
         today = datetime.date.today().isoformat()
 
         if client:
@@ -66,21 +92,22 @@ Return a JSON object strictly matching this schema:
 }}
 """
             try:
-                result = client.generate_json(prompt, system_instruction="You are a precise financial data extraction assistant.")
+                result = client.generate_json(
+                    prompt, system_instruction="You are a precise financial data extraction assistant."
+                )
                 if result.get("vendor") and result.get("amount") is not None:
-                    # Normalize category
                     cat = result.get("category", "Other")
                     if cat not in STANDARD_CATEGORIES:
                         cat = "Other"
                     result["category"] = cat
-                    result["amount"] = float(result["amount"])
+                    amt = float(result["amount"])
+                    result["amount"] = amt if math.isfinite(amt) else 0.0
                     if not result.get("date"):
                         result["date"] = today
                     return result
             except Exception as e:
                 logger.warning("LLM text parsing failed, using fallback: %s", e)
 
-        # Rule-based fallback if no LLM configured or call failed
         return self._heuristic_text_parse(text, today)
 
     def _heuristic_text_parse(self, text: str, today: str) -> dict[str, Any]:
@@ -90,22 +117,21 @@ Return a JSON object strictly matching this schema:
         category = "Other"
         tags = []
 
-        # Find amounts (Rs. 450, INR 500, ₹450, 450.00)
         amt_match = re.search(r"(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)", text, re.IGNORECASE)
         if not amt_match:
             amt_match = re.search(r"\b([\d,]+\.\d{2})\b", text)
         if amt_match:
             try:
-                amount = float(amt_match.group(1).replace(",", ""))
+                parsed_amt = float(amt_match.group(1).replace(",", ""))
+                if math.isfinite(parsed_amt):
+                    amount = parsed_amt
             except ValueError:
                 pass
 
-        # Find vendor following 'at', 'to', 'for', 'vpa'
         v_match = re.search(r"(?:at|to|vpa|paid to)\s+([A-Za-z0-9\s&'-]{2,25})", text, re.IGNORECASE)
         if v_match:
             vendor = v_match.group(1).strip().title()
 
-        # Simple category keywords
         lower = text.lower()
         if any(w in lower for w in ("swiggy", "zomato", "restaurant", "cafe", "coffee", "food", "dinner", "lunch")):
             category = "Food & Dining"
@@ -133,9 +159,17 @@ Return a JSON object strictly matching this schema:
             "notes": text.strip()[:100],
         }
 
-    def suggest_category_and_tags(self, vendor: str, amount: float, notes: str = "") -> dict[str, Any]:
+    def suggest_category_and_tags(
+        self,
+        vendor: str,
+        amount: float,
+        notes: str = "",
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Suggest appropriate category and tags for a given transaction."""
-        client = self._get_client()
+        client = self._get_client(api_key, provider, model)
         if client and vendor:
             prompt = f"""
 For an expense transaction with:
@@ -153,7 +187,9 @@ Return strictly JSON:
 }}
 """
             try:
-                res = client.generate_json(prompt, system_instruction="You are an expert expense classification assistant.")
+                res = client.generate_json(
+                    prompt, system_instruction="You are an expert expense classification assistant."
+                )
                 cat = res.get("category", "Other")
                 if cat not in STANDARD_CATEGORIES:
                     cat = "Other"
@@ -172,9 +208,12 @@ Return strictly JSON:
         image_bytes: bytes,
         mime_type: str,
         ocr_text: str = "",
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
     ) -> Optional[BillExtractionResult]:
         """Analyze receipt image using multimodal LLM vision."""
-        client = self._get_client()
+        client = self._get_client(api_key, provider, model)
         if not client:
             return None
 
@@ -212,7 +251,8 @@ Return strictly a JSON object:
                 system_instruction="You are a professional receipt extraction specialist.",
             )
             vendor = str(data.get("vendor", "Unknown Merchant")).strip().title()
-            amount = float(data.get("total_amount") or data.get("amount") or 0.0)
+            raw_amt = float(data.get("total_amount") or data.get("amount") or 0.0)
+            amount = raw_amt if math.isfinite(raw_amt) else 0.0
             category = data.get("category", "Other")
             if category not in STANDARD_CATEGORIES:
                 category = "Other"
@@ -235,7 +275,7 @@ Return strictly a JSON object:
             return None
 
     def compute_spending_velocity(self, expenses: list[Expense], budget: float) -> dict[str, Any]:
-        """Compute spending pace, burn rate, and projected month-end utilization."""
+        """Compute spending pace, burn rate, and projected month-end utilization normalized to INR."""
         now = datetime.date.today()
         current_month_str = now.strftime("%Y-%m")
         _, total_days_in_month = calendar.monthrange(now.year, now.month)
@@ -243,7 +283,7 @@ Return strictly a JSON object:
         days_remaining = max(1, total_days_in_month - day_of_month)
 
         month_expenses = [e for e in expenses if e.date.startswith(current_month_str)]
-        total_spent = sum(e.amount for e in month_expenses)
+        total_spent = sum(self._to_inr(e.amount, e.currency) for e in month_expenses)
 
         daily_burn_rate = total_spent / max(1, day_of_month)
         projected_spend = daily_burn_rate * total_days_in_month
@@ -286,34 +326,32 @@ Return strictly a JSON object:
         now = datetime.date.today()
         seven_days_ago = (now - datetime.timedelta(days=7)).isoformat()
 
-        # 1. Check for single high transactions (> 3x average)
-        amounts = [e.amount for e in expenses]
-        avg_amount = sum(amounts) / len(amounts)
+        amounts_inr = [self._to_inr(e.amount, e.currency) for e in expenses]
+        avg_amount = sum(amounts_inr) / len(amounts_inr)
 
         recent_expenses = [e for e in expenses if e.date >= seven_days_ago]
         for e in recent_expenses:
-            if e.amount > max(1500, avg_amount * 3):
+            amt_inr = self._to_inr(e.amount, e.currency)
+            if amt_inr > max(1500, avg_amount * 3):
                 anomalies.append({
                     "type": "high_transaction",
                     "severity": "high",
                     "title": f"Unusually large transaction at {e.vendor}",
                     "amount": e.amount,
                     "date": e.date,
-                    "description": f"₹{e.amount:,.2f} spent at {e.vendor} is significantly higher than your average transaction (₹{avg_amount:,.0f}).",
+                    "description": f"₹{amt_inr:,.2f} spent at {e.vendor} is significantly higher than your average transaction (₹{avg_amount:,.0f}).",
                     "category": e.category,
                 })
 
-        # 2. Category surges in the last 7 days vs previous 21 days
         cat_recent: dict[str, float] = {}
         for e in recent_expenses:
-            cat_recent[e.category] = cat_recent.get(e.category, 0) + e.amount
+            cat_recent[e.category] = cat_recent.get(e.category, 0) + self._to_inr(e.amount, e.currency)
 
         cat_prior: dict[str, float] = {}
         prior_expenses = [e for e in expenses if e.date < seven_days_ago]
         for e in prior_expenses:
-            cat_prior[e.category] = cat_prior.get(e.category, 0) + e.amount
+            cat_prior[e.category] = cat_prior.get(e.category, 0) + self._to_inr(e.amount, e.currency)
 
-        # Normalize prior to 7-day average
         weeks_prior = max(1.0, len(expenses) / 15.0)
         for cat, recent_val in cat_recent.items():
             prior_weekly_avg = cat_prior.get(cat, 0) / weeks_prior
@@ -345,12 +383,10 @@ Return strictly a JSON object:
 
         for vendor_key, txs in vendor_records.items():
             is_known = any(k in vendor_key for k in known_services)
-            # Either a known subscription service or has 2+ transactions with similar amounts
             if is_known or len(txs) >= 2:
-                amounts = [t.amount for t in txs]
-                avg_amt = sum(amounts) / len(amounts)
-                # Check consistency
-                consistent = all(abs(a - avg_amt) / max(1, avg_amt) < 0.25 for a in amounts)
+                amounts_inr = [self._to_inr(t.amount, t.currency) for t in txs]
+                avg_amt = sum(amounts_inr) / len(amounts_inr)
+                consistent = all(abs(a - avg_amt) / max(1, avg_amt) < 0.25 for a in amounts_inr)
                 if is_known or consistent:
                     latest = max(txs, key=lambda t: t.date)
                     try:
@@ -366,7 +402,7 @@ Return strictly a JSON object:
                         "frequency": "Monthly",
                         "last_billed": latest.date,
                         "next_expected": next_renewal,
-                        "total_spent_ytd": sum(amounts),
+                        "total_spent_ytd": sum(amounts_inr),
                         "count": len(txs),
                     })
 
@@ -380,10 +416,10 @@ Return strictly a JSON object:
         today_txs = [e for e in expenses if e.date == today_str]
         yesterday_txs = [e for e in expenses if e.date == yesterday_str]
 
-        today_total = sum(e.amount for e in today_txs)
-        yesterday_total = sum(e.amount for e in yesterday_txs)
+        today_total = sum(self._to_inr(e.amount, e.currency) for e in today_txs)
+        yesterday_total = sum(self._to_inr(e.amount, e.currency) for e in yesterday_txs)
 
-        top_expense = max(today_txs, key=lambda e: e.amount) if today_txs else None
+        top_expense = max(today_txs, key=lambda e: self._to_inr(e.amount, e.currency)) if today_txs else None
 
         return {
             "date": today_str,
@@ -402,14 +438,20 @@ Return strictly a JSON object:
             ),
         }
 
-    def generate_smart_tips(self, expenses: list[Expense], budget: float) -> list[dict[str, Any]]:
+    def generate_smart_tips(
+        self,
+        expenses: list[Expense],
+        budget: float,
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
         """Generate high-impact, actionable financial tips."""
-        client = self._get_client()
+        client = self._get_client(api_key, provider, model)
 
-        # If LLM available, generate customized advice based on actual data
         if client and len(expenses) >= 2:
             summary_context = [
-                f"{e.date}: {e.vendor} - ₹{e.amount} ({e.category})"
+                f"{e.date}: {e.vendor} - ₹{self._to_inr(e.amount, e.currency):.0f} ({e.category})"
                 for e in expenses[-15:]
             ]
             prompt = f"""
@@ -430,22 +472,22 @@ Return strictly JSON matching:
 }}
 """
             try:
-                res = client.generate_json(prompt, system_instruction="You are a personal financial advisor.")
+                res = client.generate_json(
+                    prompt, system_instruction="You are a personal financial advisor."
+                )
                 if res.get("tips") and isinstance(res["tips"], list):
                     return res["tips"][:3]
             except Exception as e:
                 logger.warning("LLM smart tips generation error: %s", e)
 
-        # Analytical rule-based tips fallback
         tips = []
         now = datetime.date.today()
         current_month = now.strftime("%Y-%m")
         month_expenses = [e for e in expenses if e.date.startswith(current_month)]
 
-        # Category breakdown
         cat_totals: dict[str, float] = {}
         for e in month_expenses:
-            cat_totals[e.category] = cat_totals.get(e.category, 0) + e.amount
+            cat_totals[e.category] = cat_totals.get(e.category, 0) + self._to_inr(e.amount, e.currency)
 
         if cat_totals.get("Food & Dining", 0) > (budget * 0.3):
             tips.append({
@@ -472,16 +514,29 @@ Return strictly JSON matching:
 
         return tips[:3]
 
-    def get_bundled_insights(self) -> dict[str, Any]:
+    def get_bundled_insights(
+        self,
+        session_id: str = "demo",
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Aggregate velocity, anomalies, subscriptions, daily digest, and smart tips."""
-        expenses = self.repo.get_all()
-        budget = float(self.settings_service.repo.get_setting("monthly_budget", "15000"))
+        if self.session_store:
+            session = self.session_store.get_or_create(session_id)
+            expenses = session["repo"].get_all()
+            budget = float(session.get("settings", {}).get("monthly_budget", 15000.0))
+        else:
+            expenses = []
+            budget = 15000.0
 
         velocity = self.compute_spending_velocity(expenses, budget)
         anomalies = self.detect_anomalies(expenses)
         subscriptions = self.detect_subscriptions(expenses)
         digest = self.generate_daily_digest(expenses)
-        tips = self.generate_smart_tips(expenses, budget)
+        tips = self.generate_smart_tips(
+            expenses, budget, api_key=api_key, provider=provider, model=model
+        )
 
         return {
             "velocity": velocity,
@@ -489,36 +544,50 @@ Return strictly JSON matching:
             "subscriptions": subscriptions,
             "digest": digest,
             "tips": tips,
-            "active_provider": self.settings_service.get_active_provider(),
+            "active_provider": provider,
         }
 
-    def chat_copilot(self, history: list[dict[str, str]], message: str) -> str:
+    def chat_copilot(
+        self,
+        history: list[dict[str, str]],
+        message: str,
+        session_id: str = "demo",
+        api_key: str = "",
+        provider: str = "gemini",
+        model: Optional[str] = None,
+    ) -> str:
         """Handle conversational query with live spending context injected."""
-        client = self._get_client()
+        client = self._get_client(api_key, provider, model)
         if not client:
             return (
-                "AI features are currently offline because no API key has been configured. "
-                "Please open Settings to add your Google Gemini, OpenAI, or Anthropic API key."
+                "PennyWise Copilot requires an AI API key. Please open Settings or use the API Key input "
+                "at the top of this drawer to supply your Google Gemini, OpenAI, or Anthropic API key. "
+                "Your key is held in browser memory only and never saved to disk."
             )
 
-        expenses = self.repo.get_all()
-        budget = float(self.settings_service.repo.get_setting("monthly_budget", "15000"))
+        if self.session_store:
+            session = self.session_store.get_or_create(session_id)
+            expenses = session["repo"].get_all()
+            budget = float(session.get("settings", {}).get("monthly_budget", 15000.0))
+        else:
+            expenses = []
+            budget = 15000.0
+
         velocity = self.compute_spending_velocity(expenses, budget)
 
         now = datetime.date.today().isoformat()
         current_month = datetime.date.today().strftime("%Y-%m")
         month_expenses = [e for e in expenses if e.date.startswith(current_month)]
 
-        # Category breakdown
         cat_totals: dict[str, float] = {}
         for e in month_expenses:
-            cat_totals[e.category] = cat_totals.get(e.category, 0) + e.amount
+            cat_totals[e.category] = cat_totals.get(e.category, 0) + self._to_inr(e.amount, e.currency)
 
         top_cats = sorted(cat_totals.items(), key=lambda x: x[1], reverse=True)[:5]
         top_cats_str = ", ".join(f"{c}: ₹{amt:,.0f}" for c, amt in top_cats) if top_cats else "None"
 
         recent_txs = [
-            f"{e.date} - {e.vendor}: ₹{e.amount:,.2f} ({e.category})"
+            f"{e.date} - {e.vendor}: ₹{self._to_inr(e.amount, e.currency):,.2f} ({e.category})"
             for e in expenses[-12:]
         ]
         recent_txs_str = chr(10).join(recent_txs) if recent_txs else "No recent transactions."
@@ -535,17 +604,19 @@ User's Real-Time Financial Snapshot:
 - Budget Pace Status: {velocity['status']} ({velocity['pacing_percentage']}% of target)
 - Top Categories: {top_cats_str}
 
-Recent 12 Transactions:
+Recent Transactions:
 {recent_txs_str}
 
 Guidelines:
-1. Always reference the user's actual spending data when answering.
+1. Reference the user's spending data accurately.
 2. Be encouraging, concise, and direct with numbers.
-3. Suggest practical ways to improve their financial health without sounding judgmental.
+3. Suggest practical ways to improve financial health without sounding judgmental.
 4. Format responses cleanly using markdown bullet points and bold currency amounts.
 """
         try:
-            return client.chat(history=history, message=message, system_instruction=system_instruction)
+            return client.chat(
+                history=history, message=message, system_instruction=system_instruction
+            )
         except Exception as e:
             logger.error("Copilot chat generation failed: %s", e)
             return f"I encountered an issue connecting to the AI provider: {e}. Please check your API key in Settings."

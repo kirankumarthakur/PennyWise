@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, TrendingUp, AlertTriangle, Lightbulb, RefreshCw, Compass, ArrowUpRight } from "lucide-react";
 import { motion } from "framer-motion";
+import { apiFetch } from "../../config/api";
 
 export default function AiInsightsHub({ onSelectCategory }) {
   const [insights, setInsights] = useState(null);
@@ -10,7 +11,7 @@ export default function AiInsightsHub({ onSelectCategory }) {
   const fetchInsights = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/ai/insights");
+      const res = await apiFetch("/api/ai/insights");
       const data = await res.json();
       if (data.success && data.insights) {
         setInsights(data.insights);

@@ -5,6 +5,7 @@ import { formatDateInfo } from '../utils/dateUtils';
 import AddExpenseModal from "./AddExpenseModal";
 import TransactionDetailModal from "./TransactionDetailModal";
 import AiSmartFillModal from "./ai/AiSmartFillModal";
+import { apiFetch } from "../config/api";
 
 export default function ExpenseTable() {
   const [expenses, setExpenses] = useState([]);
@@ -28,7 +29,7 @@ export default function ExpenseTable() {
       if (selectedTag && selectedTag !== 'All Tags') params.append('tag', selectedTag);
       if (date) params.append('start_date', date);
       
-      const response = await fetch(`http://localhost:5000/api/expenses?${params}`);
+      const response = await apiFetch(`/api/expenses?${params}`);
       const data = await response.json();
       
       if (data.success) {
@@ -63,7 +64,7 @@ export default function ExpenseTable() {
   const handleDeleteExpense = async (id) => {
     if (!window.confirm("Are you sure you want to delete this expense?")) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/expenses/${id}`, {
+      const res = await apiFetch(`/api/expenses/${id}`, {
         method: "DELETE"
       });
       const data = await res.json();

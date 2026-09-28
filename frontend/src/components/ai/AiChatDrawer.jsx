@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Sparkles, X, Send, Bot, User, RefreshCw, ChevronUp, ChevronDown } from "lucide-react";
+import { Sparkles, X, Send, Bot, User, RefreshCw, ChevronUp, ChevronDown, Key, Check } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiFetch } from "../../config/api";
+import { useAiKey } from "../../context/AiKeyContext";
 
 const QUICK_PROMPTS = [
   "How much did I spend this week?",
@@ -10,6 +12,7 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AiChatDrawer() {
+  const { apiKey, setApiKey, provider, hasKey } = useAiKey();
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState([
     {
@@ -19,6 +22,8 @@ export default function AiChatDrawer() {
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [drawerKeyInput, setDrawerKeyInput] = useState("");
+  const [showKeyPrompt, setShowKeyPrompt] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -31,9 +36,22 @@ export default function AiChatDrawer() {
     }
   }, [messages, isOpen]);
 
+  const handleSaveDrawerKey = () => {
+    if (drawerKeyInput.trim()) {
+      setApiKey(drawerKeyInput.trim());
+      setShowKeyPrompt(false);
+      setDrawerKeyInput("");
+    }
+  };
+
   const handleSend = async (messageText = null) => {
     const textToSend = (messageText || input).trim();
     if (!textToSend || loading) return;
+
+    if (!hasKey) {
+      setShowKeyPrompt(true);
+      return;
+    }
 
     const userMessage = { role: "user", content: textToSend };
     setMessages(prev => [...prev, userMessage]);
@@ -46,7 +64,7 @@ export default function AiChatDrawer() {
         content: m.content
       }));
 
-      const res = await fetch("http://localhost:5000/api/ai/chat", {
+      const res = await apiFetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -111,7 +129,9 @@ export default function AiChatDrawer() {
                 </div>
                 <div>
                   <h3 className="text-xs font-bold text-gray-900 dark:text-white">PennyWise Copilot</h3>
-                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Real-time Financial Advisor</p>
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    {hasKey ? `${provider.toUpperCase()} Key In-Memory` : "Key Needed (Memory Only)"}
+                  </p>
                 </div>
               </div>
               <button
@@ -121,6 +141,43 @@ export default function AiChatDrawer() {
                 <X size={16} />
               </button>
             </div>
+
+            {(!hasKey || showKeyPrompt) && (
+              <div className="bg-amber-50 dark:bg-amber-950/50 p-3 border-b border-amber-200 dark:border-amber-800 text-[11px] space-y-2">
+                <div className="flex items-center justify-between text-amber-900 dark:text-amber-200 font-bold">
+                  <span className="flex items-center gap-1.5">
+                    <Key size={13} />
+                    <span>Enter {provider.toUpperCase()} API Key:</span>
+                  </span>
+                  {showKeyPrompt && hasKey && (
+                    <button
+                      onClick={() => setShowKeyPrompt(false)}
+                      className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <div className="flex gap-1.5">
+                  <input
+                    type="password"
+                    value={drawerKeyInput}
+                    onChange={(e) => setDrawerKeyInput(e.target.value)}
+                    placeholder="Paste API key (in-memory only)..."
+                    className="flex-1 px-2.5 py-1 text-xs rounded-lg border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                  />
+                  <button
+                    onClick={handleSaveDrawerKey}
+                    className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs transition"
+                  >
+                    Set Key
+                  </button>
+                </div>
+                <p className="text-[10px] text-amber-800/80 dark:text-amber-300/80">
+                  Key is held in volatile memory and never stored on the server.
+                </p>
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3 text-xs">
               {messages.map((m, idx) => (
@@ -191,7 +248,7 @@ export default function AiChatDrawer() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask a question about your spending..."
+                  placeholder={hasKey ? "Ask a question about your spending..." : "Enter key above, then ask a question..."}
                   className="flex-1 px-3 py-2 text-xs rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
                 <button

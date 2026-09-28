@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { X, Plus, Sparkles, Check, AlertCircle, Tag, Upload, Paperclip } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AiSmartFillModal from "./ai/AiSmartFillModal";
+import { apiFetch } from "../config/api";
 
 const CATEGORIES = [
   "Food & Dining",
@@ -38,7 +39,7 @@ export default function AddExpenseModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      fetch("http://localhost:5000/api/tags")
+      apiFetch("/api/tags")
         .then((res) => res.json())
         .then((data) => {
           if (data.success && data.tags) {
@@ -90,7 +91,7 @@ export default function AddExpenseModal({ isOpen, onClose }) {
     try {
       setSuggesting(true);
       setError(null);
-      const res = await fetch("http://localhost:5000/api/ai/suggest", {
+      const res = await apiFetch("/api/ai/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -144,7 +145,7 @@ export default function AddExpenseModal({ isOpen, onClose }) {
         const formData = new FormData();
         formData.append(receiptFile.type === "application/pdf" ? "pdf" : "image", receiptFile);
         try {
-          const uploadRes = await fetch("http://localhost:5000/api/process-bill", {
+          const uploadRes = await apiFetch("/api/process-bill", {
             method: "POST",
             body: formData,
           });
@@ -168,7 +169,7 @@ export default function AddExpenseModal({ isOpen, onClose }) {
         receipt_url: receiptUrl || null,
       };
 
-      const response = await fetch("http://localhost:5000/api/expenses", {
+      const response = await apiFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),

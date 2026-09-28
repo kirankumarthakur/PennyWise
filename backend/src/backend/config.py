@@ -24,10 +24,31 @@ class AppConfig:
     SQLITE_DB_PATH = Path(os.environ.get("PENNYWISE_DB_PATH", BACKEND_ROOT / "pennywise.db"))
     RECEIPTS_DIR = Path(os.environ.get("PENNYWISE_RECEIPTS_DIR", BACKEND_ROOT / "uploads" / "receipts"))
 
-    # Server settings
-    HOST = os.environ.get("PENNYWISE_HOST", "0.0.0.0")
-    PORT = int(os.environ.get("PENNYWISE_PORT", "5000"))
-    DEBUG = os.environ.get("PENNYWISE_DEBUG", "True").lower() in ("true", "1", "yes")
+    # Server and Deployment settings
+    HOST = "0.0.0.0"
+    PORT = int(os.environ.get("PORT", 5000))
+    DEBUG = False
+
+    # Security, CORS, and Limits
+    MAX_CONTENT_LENGTH = 10 * 1024 * 1024
+    ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg", "webp", "pdf"}
+    CORS_ORIGINS = [
+        o.strip() for o in os.environ.get("CORS_ORIGINS", "*").split(",") if o.strip()
+    ]
+
+    # In-memory session limits for public demo
+    MAX_SESSIONS = int(os.environ.get("MAX_SESSIONS", 100))
+    SESSION_TTL_SECONDS = int(os.environ.get("SESSION_TTL_SECONDS", 1800))
+    MAX_EXPENSES_PER_SESSION = 80
+    MAX_RECEIPTS_PER_SESSION = 15
+
+    # Exchange rates relative to INR
+    EXCHANGE_RATES = {
+        "INR": 1.0,
+        "USD": 83.5,
+        "EUR": 91.0,
+        "GBP": 106.0,
+    }
 
     # Logging
     LOG_LEVEL = os.environ.get("PENNYWISE_LOG_LEVEL", "INFO").upper()

@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Sparkles, X, Check, ArrowRight, CornerDownLeft, AlertCircle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { apiFetch } from "../../config/api";
 
 const SAMPLE_TEXTS = [
   "Paid Rs 450 at Starbucks for Caramel Macchiato on 28 Sep",
@@ -27,7 +28,7 @@ export default function AiSmartFillModal({ isOpen, onClose, onApplyToForm }) {
     setParsed(null);
 
     try {
-      const res = await fetch("http://localhost:5000/api/ai/parse-text", {
+      const res = await apiFetch("/api/ai/parse-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: raw })
@@ -51,7 +52,7 @@ export default function AiSmartFillModal({ isOpen, onClose, onApplyToForm }) {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/api/expenses", {
+      const res = await apiFetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(parsed)

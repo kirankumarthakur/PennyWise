@@ -1,10 +1,12 @@
 """Business logic service for managing expenses and computing analytics."""
 
 import logging
+import math
 from collections import defaultdict
 from datetime import datetime
 from typing import List, Dict, Any, Tuple, Optional
 
+from backend.config import AppConfig
 from backend.models.expense import Expense, ExpenseFilter
 from backend.repositories.base import ExpenseRepository
 
@@ -13,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 class ExpenseService:
     """Provides expense validation, persistence interactions, and financial analytics."""
-
-    USD_TO_INR_RATE = 80.0
 
     def __init__(self, repository: ExpenseRepository):
         self.repository = repository
@@ -28,39 +28,58 @@ class ExpenseService:
 
         try:
             amount = float(data["amount"])
-            if amount <= 0:
-                return None, "Amount must be greater than 0"
+            if not math.isfinite(amount) or amount <= 0 or amount > 100_000_000:
+                return None, "Amount must be a positive finite number"
         except (ValueError, TypeError):
             return None, "Amount must be a valid number"
 
-        vendor = str(data["vendor"]).strip()
+        vendor = str(data["vendor"]).strip()[:100]
         if not vendor:
             return None, "Vendor name cannot be empty"
 
-        category = str(data["category"]).strip()
+        category = str(data["category"]).strip()[:50]
         if not category:
             return None, "Category cannot be empty"
 
-        # Sanitize tags list
+        date_val = str(data["date"]).strip()[:20]
+        if not date_val:
+            date_val = datetime.now().strftime("%Y-%m-%d")
+
+        currency = str(data.get("currency", "INR")).strip().upper()[:5]
+        if not currency or not currency.isalpha():
+            currency = "INR"
+
+        if self.repository.count() >= AppConfig.MAX_EXPENSES_PER_SESSION:
+            return None, (
+                f"Demo session limit reached (maximum {AppConfig.MAX_EXPENSES_PER_SESSION} expenses). "
+                "Please clear expenses or reset demo to continue."
+            )
+
         raw_tags = data.get("tags", [])
         if isinstance(raw_tags, str):
             raw_tags = [t.strip() for t in raw_tags.split(",") if t.strip()]
-        tags = [str(t).strip().lower() for t in raw_tags if str(t).strip()]
+        tags = [str(t).strip().lower()[:30] for t in raw_tags if str(t).strip()]
 
         expense = Expense(
             id=0,
             vendor=vendor,
-            amount=amount,
-            currency=data.get("currency", "INR"),
+            amount=round(amount, 2),
+            currency=currency,
             category=category,
-            date=str(data["date"]).strip(),
+            date=date_val,
             items=data.get("items", []),
-            tags=tags,
+            tags=tags[:10],
             receipt_url=data.get("receipt_url"),
         )
 
         persisted = self.repository.add(expense)
-        logger.info("Created expense ID %d for vendor '%s' (amount: %.2f)", persisted.id, persisted.vendor, persisted.amount)
+        logger.info(
+            "Created expense ID %d for vendor '%s' (amount: %.2f %s)",
+            persisted.id,
+            persisted.vendor,
+            persisted.amount,
+            persisted.currency,
+        )
         return persisted, None
 
     def list_expenses(self, filter_criteria: Optional[ExpenseFilter] = None) -> List[Expense]:
@@ -68,7 +87,7 @@ class ExpenseService:
         return self.repository.get_all(filter_criteria)
 
     def delete_expense(self, expense_id: int) -> bool:
-        """Delete an existing expense by ID."""
+        """Delete an individual expense by ID."""
         deleted = self.repository.delete(expense_id)
         if deleted:
             logger.info("Deleted expense ID: %d", expense_id)
@@ -107,6 +126,7 @@ class ExpenseService:
                 "totalExpenses": 0.0,
                 "averageExpense": 0.0,
                 "expenseCount": 0,
+                "base_currency": "INR",
             }
 
         category_totals = defaultdict(float)
@@ -114,16 +134,17 @@ class ExpenseService:
         tag_totals = defaultdict(float)
 
         for e in expenses:
-            amount_inr = e.amount * self.USD_TO_INR_RATE if e.currency == "USD" else e.amount
+            rate = AppConfig.EXCHANGE_RATES.get((e.currency or "INR").upper(), 1.0)
+            raw_inr = e.amount * rate
+            amount_inr = raw_inr if math.isfinite(raw_inr) else 0.0
+
             category_totals[e.category] += amount_inr
 
-            # Tag totals
             for t in e.tags:
                 tag_name = t.strip()
                 if tag_name:
                     tag_totals[tag_name] += amount_inr
 
-            # Month grouping
             try:
                 date_str = e.date[0] if isinstance(e.date, list) and e.date else str(e.date)
                 parsed_dt = datetime.strptime(date_str, "%Y-%m-%d")
@@ -159,6 +180,7 @@ class ExpenseService:
             "totalExpenses": round(total_expenses, 2),
             "averageExpense": round(average_expense, 2),
             "expenseCount": len(expenses),
+            "base_currency": "INR",
         }
 
     def count(self) -> int:

@@ -11,8 +11,8 @@ import LineChartCard from "./LineChartCard";
 import SubscriptionRadar from "./SubscriptionRadar";
 import UploadCard from "./UploadCard";
 import AiInsightsHub from "./ai/AiInsightsHub";
-import AddExpenseModal from "./AddExpenseModal";
 import AiSmartFillModal from "./ai/AiSmartFillModal";
+import { apiFetch } from "../config/api";
 
 export default function Dashboard({ onNavigateAddExpense }) {
   const [activeTab, setActiveTab] = useState("transactions"); // 'transactions' | 'trends' | 'subscriptions'
@@ -31,9 +31,9 @@ export default function Dashboard({ onNavigateAddExpense }) {
   const fetchDashboardMetrics = async () => {
     try {
       const [insightsRes, expensesRes, settingsRes] = await Promise.all([
-        fetch("http://localhost:5000/api/ai/insights"),
-        fetch("http://localhost:5000/api/expenses"),
-        fetch("http://localhost:5000/api/settings")
+        apiFetch("/api/ai/insights"),
+        apiFetch("/api/expenses"),
+        apiFetch("/api/settings")
       ]);
 
       const insightsData = await insightsRes.json();
