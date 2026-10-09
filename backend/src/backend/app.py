@@ -1,5 +1,6 @@
 """Application factory and entry point for PennyWise backend."""
 
+import os
 import logging
 from flask import Flask, jsonify
 from flask_cors import CORS
@@ -30,9 +31,20 @@ def create_app(config: type[AppConfig] = AppConfig) -> Flask:
 
     app = Flask(__name__)
     app.config["MAX_CONTENT_LENGTH"] = config.MAX_CONTENT_LENGTH
+
+    cors_origin = os.environ.get("CORS_ORIGINS")
+    print(f"CORS Origin: {cors_origin}", flush=True)
+    logger.info("CORS Origin: %s", cors_origin)
+
+    # Support origins with or without trailing slash for exact browser matching
+    origins = None
+    if cors_origin:
+        clean_origin = cors_origin.strip().rstrip("/")
+        origins = [clean_origin, f"{clean_origin}/"]
+
     CORS(
         app,
-        origins=config.CORS_ORIGINS,
+        origins=origins,
         supports_credentials=True,
         allow_headers=["Content-Type", "X-Session-ID", "X-AI-Key", "X-AI-Provider", "X-AI-Model"],
     )

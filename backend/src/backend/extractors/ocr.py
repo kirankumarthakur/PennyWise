@@ -33,7 +33,8 @@ class TesseractOcrEngine(OcrEngine):
             pytesseract.pytesseract.tesseract_cmd = cmd
             logger.info("Configured Tesseract binary at: %s", cmd)
         else:
-            logger.warning("Tesseract binary not found in standard system paths.")
+            print("Tesseract OCR is not available in demo environment.", flush=True)
+            logger.info("Tesseract OCR is not available in demo environment.")
 
     def is_available(self) -> bool:
         """Verify Tesseract accessibility."""
@@ -71,7 +72,7 @@ class TesseractOcrEngine(OcrEngine):
                 "- Amount: [Enter amount]\n"
                 "- Date: [Enter date]\n"
                 "- Category: [Select category]\n\n"
-                "Note: Install Tesseract OCR for automatic text extraction."
+                "Note: Tesseract OCR is not available in demo environment."
             )
 
         try:
