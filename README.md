@@ -39,8 +39,8 @@ PennyWise is a local, privacy-first personal finance platform and expense tracke
 ## Requirements & Prerequisites
 
 ### 1. System Requirements
-- **Python**: `3.10+` (managed via [`backend/pyproject.toml`](backend/pyproject.toml))
-- **Node.js**: `18.0+` & `npm` (managed via [`frontend/package.json`](frontend/package.json))
+- **Python**: `3.14` (managed via [`backend/pyproject.toml`](backend/pyproject.toml))
+- **Node.js**: `24.0+` & `npm` (managed via [`frontend/package.json`](frontend/package.json))
 - **Package Manager**: [`uv`](https://docs.astral.sh/uv/) (recommended) or standard `pip` / `venv`
 
 ### 2. External OCR Engine (For Receipt Extraction)
