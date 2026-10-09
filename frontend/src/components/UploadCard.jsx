@@ -5,7 +5,7 @@ import { getCurrentLocalDate, formatDisplayDate } from '../utils/dateUtils';
 import { apiFetch } from "../config/api";
 
 
-export default function UploadCard() {
+export default function UploadCard({ allowManualEntry = true }) {
   const [extractedData, setExtractedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -269,31 +269,33 @@ export default function UploadCard() {
       </div>
       
       {/* Manual Entry Toggle */}
-      <div className="flex justify-center mb-4">
-        <button
-          onClick={handleManualEntryToggle}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-medium ${
-            manualEntry 
-              ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800' 
-              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800'
-          }`}
-        >
-          {manualEntry ? (
-            <>
-              <UploadCloud size={16} />
-              Switch to File Upload
-            </>
-          ) : (
-            <>
-              <Edit3 size={16} />
-              Manual Entry
-            </>
-          )}
-        </button>
-      </div>
+      {allowManualEntry && (
+        <div className="flex justify-center mb-4">
+          <button
+            onClick={handleManualEntryToggle}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition text-sm font-medium ${
+              manualEntry 
+                ? 'bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800' 
+                : 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800'
+            }`}
+          >
+            {manualEntry ? (
+              <>
+                <UploadCloud size={16} />
+                Switch to File Upload
+              </>
+            ) : (
+              <>
+                <Edit3 size={16} />
+                Manual Entry
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Manual Entry Form */}
-      {manualEntry && (
+      {allowManualEntry && manualEntry && (
         <div className="space-y-4 p-4 bg-orange-50/60 dark:bg-amber-950/20 rounded-xl border border-orange-200 dark:border-amber-900/40">
           <div className="flex items-center gap-2 text-orange-700 dark:text-orange-300 mb-2">
             <Plus size={16} />

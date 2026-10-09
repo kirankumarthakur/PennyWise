@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from "react";
 import { 
   Wallet, TrendingDown, TrendingUp, Sparkles, Receipt, 
-  ArrowUpRight, Clock, Plus, BarChart3, ListFilter, Repeat
+  ArrowUpRight, Clock, Plus, BarChart3, ListFilter
 } from "lucide-react";
 import { motion } from "framer-motion";
 
 import ExpenseTable from "./ExpenseTable";
 import PieChartCard from "./PieChartCard";
 import LineChartCard from "./LineChartCard";
-import SubscriptionRadar from "./SubscriptionRadar";
 import UploadCard from "./UploadCard";
 import AddExpenseModal from "./AddExpenseModal";
 import AiInsightsHub from "./ai/AiInsightsHub";
 import AiSmartFillModal from "./ai/AiSmartFillModal";
 import { apiFetch } from "../config/api";
+import { useAiKey } from "../context/AiKeyContext";
 
 export default function Dashboard({ onNavigateAddExpense }) {
-  const [activeTab, setActiveTab] = useState("transactions"); // 'transactions' | 'trends' | 'subscriptions'
+  const { hasKey, provider: aiProvider } = useAiKey();
+  const [activeTab, setActiveTab] = useState("transactions"); // 'transactions' | 'trends'
   const [metrics, setMetrics] = useState({
     totalSpentMonth: 0,
     monthlyBudget: 15000,
@@ -24,7 +25,6 @@ export default function Dashboard({ onNavigateAddExpense }) {
     safeAllowance: 0,
     activeProvider: "gemini",
     expenseCount: 0,
-    topCategory: "None"
   });
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSmartFillOpen, setIsSmartFillOpen] = useState(false);
@@ -45,13 +45,6 @@ export default function Dashboard({ onNavigateAddExpense }) {
       const expenses = expensesData?.expenses || [];
       const settings = settingsData?.settings || {};
 
-      // Compute top category
-      const catCounts = {};
-      expenses.forEach(e => {
-        catCounts[e.category] = (catCounts[e.category] || 0) + e.amount;
-      });
-      const topCat = Object.entries(catCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "None";
-
       setMetrics({
         totalSpentMonth: velocity.total_spent || 0,
         monthlyBudget: velocity.budget || settings.monthly_budget || 15000,
@@ -59,7 +52,6 @@ export default function Dashboard({ onNavigateAddExpense }) {
         safeAllowance: velocity.safe_daily_allowance || 0,
         activeProvider: settings.active_provider || "gemini",
         expenseCount: expenses.length,
-        topCategory: topCat
       });
     } catch (err) {
       console.error("Failed to load dashboard metrics:", err);
@@ -149,20 +141,36 @@ export default function Dashboard({ onNavigateAddExpense }) {
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-5 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">AI Intelligence Engine</span>
-            <div className="p-2 bg-gradient-to-tr from-purple-600 to-indigo-600 text-white rounded-xl shadow-sm">
+            <div className={`p-2 rounded-xl shadow-sm ${hasKey ? "bg-gradient-to-tr from-purple-600 to-indigo-600 text-white" : "bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400"}`}>
               <Sparkles size={16} />
             </div>
           </div>
           <div className="mt-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-black text-gray-900 dark:text-white capitalize">
-                {metrics.activeProvider}
-              </span>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            </div>
-            <p className="text-[11px] text-gray-400 mt-0.5">
-              Top Category: <span className="font-semibold text-gray-700 dark:text-gray-300">{metrics.topCategory}</span>
-            </p>
+            {hasKey ? (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-lg font-black text-gray-900 dark:text-white capitalize">
+                    {aiProvider || metrics.activeProvider}
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                </div>
+                <p className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium mt-0.5">
+                  Engine Configured & Ready
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm font-bold text-amber-600 dark:text-amber-400">
+                    Provider Not Configured
+                  </span>
+                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                </div>
+                <p className="text-[11px] text-gray-400 mt-0.5">
+                  Configure API key in Settings
+                </p>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -195,17 +203,6 @@ export default function Dashboard({ onNavigateAddExpense }) {
                 <span>Spending Trends</span>
               </button>
 
-              <button
-                onClick={() => setActiveTab("subscriptions")}
-                className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-bold transition ${
-                  activeTab === "subscriptions"
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white"
-                }`}
-              >
-                <Repeat size={14} />
-                <span>Subscription Radar</span>
-              </button>
             </div>
 
             <div className="flex items-center gap-2 pr-1">
@@ -234,13 +231,11 @@ export default function Dashboard({ onNavigateAddExpense }) {
               <PieChartCard />
             </div>
           )}
-
-          {activeTab === "subscriptions" && <SubscriptionRadar />}
         </div>
 
         <div className="lg:col-span-4 space-y-5">
           <AiInsightsHub />
-          <UploadCard />
+          <UploadCard allowManualEntry={false} />
         </div>
       </div>
 

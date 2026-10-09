@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Sparkles, Key, CheckCircle2, AlertCircle, Shield, RefreshCw, Cpu, Wallet, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
+import { Sparkles, Key, CheckCircle2, AlertCircle, RefreshCw, Cpu, Wallet, Eye, EyeOff, Trash2, RotateCcw } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiFetch } from "../config/api";
 import { useAiKey } from "../context/AiKeyContext";
@@ -298,14 +298,11 @@ export default function Settings({ onResetDemo }) {
     <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight flex items-center gap-2">
-            <span>Settings & BYOK Security</span>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-              Demo Mode
-            </span>
+          <h2 className="text-xl font-black text-gray-900 dark:text-white tracking-tight">
+            Settings
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400">
-            Bring-Your-Own-Key (BYOK) memory security, model selection, and ephemeral session preferences
+            Configure AI providers, models, budget, and currency
           </p>
         </div>
 
@@ -319,16 +316,6 @@ export default function Settings({ onResetDemo }) {
         </button>
       </div>
 
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/30 dark:to-teal-950/30 border border-emerald-200 dark:border-emerald-800 rounded-2xl p-4 flex items-start gap-3">
-        <Shield size={20} className="text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-        <div className="text-xs text-emerald-900 dark:text-emerald-200 space-y-1">
-          <p className="font-bold">Zero Storage Persistence Guarantee</p>
-          <p className="opacity-90 leading-relaxed">
-            API keys are maintained strictly in browser React memory and are <strong>never written to SQLite, server files, or browser localStorage</strong>. Keys are transmitted only over HTTPS headers directly for AI inference and discarded immediately.
-          </p>
-        </div>
-      </div>
-
       <div className="flex border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={() => setActiveTab("ai")}
@@ -339,7 +326,7 @@ export default function Settings({ onResetDemo }) {
           }`}
         >
           <Cpu size={15} />
-          <span>AI Intelligence & Keys</span>
+          <span>AI Settings</span>
         </button>
         <button
           onClick={() => setActiveTab("preferences")}
@@ -350,7 +337,7 @@ export default function Settings({ onResetDemo }) {
           }`}
         >
           <Wallet size={15} />
-          <span>Budget, Currency & Demo Session</span>
+          <span>Budget & Preferences</span>
         </button>
       </div>
 
@@ -360,7 +347,7 @@ export default function Settings({ onResetDemo }) {
             <div>
               <h3 className="text-sm font-bold text-gray-900 dark:text-white">Active AI Engine</h3>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Select your preferred LLM provider for receipt scanning, financial insights, and copilot chat
+                Select your preferred LLM provider
               </p>
             </div>
 
@@ -371,27 +358,14 @@ export default function Settings({ onResetDemo }) {
                   if (apiKeys.gemini) setContextKey(apiKeys.gemini);
                   setContextProvider("gemini");
                 }}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
+                className={`p-4 rounded-xl border-2 cursor-pointer transition flex items-center justify-between ${
                   activeProvider === "gemini"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
                     : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-sm text-gray-900 dark:text-white">Google Gemini</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300">
-                      Free Tier Available
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official google-genai SDK. Real-time multimodal vision, high-speed receipt extraction, and deep insights with Gemini 3.8 Flash and 3.7 Flash.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>Gemini 3.8 / 3.7 Flash</span>
-                  {activeProvider === "gemini" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
-                </div>
+                <span className="font-bold text-sm text-gray-900 dark:text-white">Google Gemini</span>
+                {activeProvider === "gemini" && <span className="text-blue-600 dark:text-blue-400 font-bold text-xs">Selected</span>}
               </div>
 
               <div
@@ -400,27 +374,14 @@ export default function Settings({ onResetDemo }) {
                   if (apiKeys.openai) setContextKey(apiKeys.openai);
                   setContextProvider("openai");
                 }}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
+                className={`p-4 rounded-xl border-2 cursor-pointer transition flex items-center justify-between ${
                   activeProvider === "openai"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
                     : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-sm text-gray-900 dark:text-white">OpenAI</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-950/80 text-purple-700 dark:text-purple-300">
-                      Official SDK
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official openai SDK. Multimodal analysis, reasoning, and structured receipt data extraction with GPT-6 Luna, GPT-6.1 Sol, and o3-mini.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>GPT-6 Luna & Sol</span>
-                  {activeProvider === "openai" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
-                </div>
+                <span className="font-bold text-sm text-gray-900 dark:text-white">OpenAI</span>
+                {activeProvider === "openai" && <span className="text-blue-600 dark:text-blue-400 font-bold text-xs">Selected</span>}
               </div>
 
               <div
@@ -429,27 +390,14 @@ export default function Settings({ onResetDemo }) {
                   if (apiKeys.anthropic) setContextKey(apiKeys.anthropic);
                   setContextProvider("anthropic");
                 }}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition flex flex-col justify-between ${
+                className={`p-4 rounded-xl border-2 cursor-pointer transition flex items-center justify-between ${
                   activeProvider === "anthropic"
                     ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/40 shadow-sm"
                     : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-gray-800"
                 }`}
               >
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-bold text-sm text-gray-900 dark:text-white">Anthropic Claude</span>
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300">
-                      Official SDK
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
-                    Official anthropic SDK. Deep financial reasoning, anomaly explanation, and advisory with Claude Haiku 5.5 and Claude Sonnet 5.5.
-                  </p>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-[11px] text-gray-400">
-                  <span>Claude Haiku & Sonnet 5.5</span>
-                  {activeProvider === "anthropic" && <span className="text-blue-600 dark:text-blue-400 font-bold">Selected</span>}
-                </div>
+                <span className="font-bold text-sm text-gray-900 dark:text-white">Anthropic Claude</span>
+                {activeProvider === "anthropic" && <span className="text-blue-600 dark:text-blue-400 font-bold text-xs">Selected</span>}
               </div>
             </div>
           </div>
@@ -478,7 +426,7 @@ export default function Settings({ onResetDemo }) {
                       <h4 className="font-bold text-xs text-gray-900 dark:text-white">{title} Configuration</h4>
                       {hasCurrentKey && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/80 text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                          <CheckCircle2 size={11} /> Key in Memory
+                          <CheckCircle2 size={11} /> Configured
                         </span>
                       )}
                     </div>
@@ -489,7 +437,7 @@ export default function Settings({ onResetDemo }) {
                           type="button"
                           onClick={() => handleRemoveKey(provider)}
                           className="flex items-center gap-1 px-2.5 py-1 text-red-600 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-[11px] font-semibold rounded-lg transition"
-                          title="Clear this API key from browser memory"
+                          title="Clear API key"
                         >
                           <Trash2 size={12} />
                           <span>Remove Key</span>
@@ -550,7 +498,7 @@ export default function Settings({ onResetDemo }) {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
                     <div>
                       <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300 mb-1">
-                        API Key (Kept in Browser Memory Only)
+                        API Key
                       </label>
                       <div className="relative">
                         <input
@@ -569,13 +517,12 @@ export default function Settings({ onResetDemo }) {
                           {showKeys[provider] ? <EyeOff size={14} /> : <Eye size={14} />}
                         </button>
                       </div>
-                      <p className="text-[10px] text-gray-400 mt-1">Never saved to server storage or disk. Discarded on page refresh.</p>
                     </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="block text-[11px] font-semibold text-gray-700 dark:text-gray-300">
-                          Model Name ({modelOptions.length} available)
+                          Model
                         </label>
                         <button
                           type="button"
@@ -680,14 +627,11 @@ export default function Settings({ onResetDemo }) {
           <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-100 dark:border-gray-700 shadow-sm space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                  <span>Demo Session Isolation</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300">
-                    In-Memory SQLite
-                  </span>
+                <h3 className="text-sm font-bold text-gray-900 dark:text-white">
+                  Reset Demo Data
                 </h3>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  Your session runs entirely in server memory and is completely isolated from other visitors. You can reset to clean fictional sample data at any time.
+                  Reset expenses and settings back to default sample data
                 </p>
               </div>
               <button
@@ -697,7 +641,7 @@ export default function Settings({ onResetDemo }) {
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50"
               >
                 <RotateCcw size={13} className={resettingDemo ? "animate-spin" : ""} />
-                <span>{resettingDemo ? "Resetting..." : "Reset Demo Data"}</span>
+                <span>{resettingDemo ? "Resetting..." : "Reset Data"}</span>
               </button>
             </div>
           </div>

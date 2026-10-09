@@ -1,17 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Search, Filter, RefreshCw, Plus, Eye, Receipt, Trash2, Tag, Sparkles, AlertCircle } from "lucide-react";
+import { Search, Filter, RefreshCw, Eye, Receipt, Trash2, Tag, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatDateInfo } from '../utils/dateUtils';
-import AddExpenseModal from "./AddExpenseModal";
 import TransactionDetailModal from "./TransactionDetailModal";
-import AiSmartFillModal from "./ai/AiSmartFillModal";
 import { apiFetch } from "../config/api";
 
 export default function ExpenseTable() {
   const [expenses, setExpenses] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSmartFillOpen, setIsSmartFillOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [error, setError] = useState(null);
@@ -129,22 +125,6 @@ export default function ExpenseTable() {
           <p className="text-xs text-gray-500 dark:text-gray-400">Transactions with in-line AI intelligence and smart filters</p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsSmartFillOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 hover:bg-purple-100 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 rounded-xl transition shadow-sm"
-          >
-            <Sparkles size={14} className="text-purple-600 dark:text-purple-400" />
-            <span>Fill with AI</span>
-          </button>
-
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-sm transition"
-          >
-            <Plus size={14} />
-            <span>Add Expense</span>
-          </button>
-
           <button 
             onClick={fetchExpenses}
             className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
@@ -341,8 +321,6 @@ export default function ExpenseTable() {
         </div>
       )}
 
-      <AddExpenseModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-      <AiSmartFillModal isOpen={isSmartFillOpen} onClose={() => setIsSmartFillOpen(false)} />
       <TransactionDetailModal
         expense={selectedExpense}
         isOpen={isDetailOpen}

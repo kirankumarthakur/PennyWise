@@ -2,8 +2,10 @@ import React, { useState, useEffect } from "react";
 import { Sparkles, TrendingUp, AlertTriangle, Lightbulb, RefreshCw, Compass, ArrowUpRight } from "lucide-react";
 import { motion } from "framer-motion";
 import { apiFetch } from "../../config/api";
+import { useAiKey } from "../../context/AiKeyContext";
 
 export default function AiInsightsHub({ onSelectCategory }) {
+  const { hasKey } = useAiKey();
   const [insights, setInsights] = useState(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("velocity"); // 'velocity' | 'anomalies' | 'tips'
@@ -58,7 +60,7 @@ export default function AiInsightsHub({ onSelectCategory }) {
           <div>
             <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
               <span>Financial Intelligence</span>
-              {insights?.active_provider && (
+              {hasKey && insights?.active_provider && (
                 <span className="text-[10px] uppercase font-semibold px-1.5 py-0.2 bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-300 rounded">
                   {insights.active_provider}
                 </span>

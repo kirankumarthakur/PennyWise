@@ -17,6 +17,12 @@ function AppContent() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem("pennywise_theme");
     if (saved) return saved === "dark";
@@ -65,10 +71,10 @@ function AppContent() {
         <div className="bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-800 text-white text-xs px-4 py-2 flex items-center justify-between gap-3 shadow-sm z-50">
           <div className="flex items-center gap-2 overflow-hidden">
             <span className="bg-amber-400 text-gray-900 font-extrabold px-2 py-0.5 rounded text-[10px] tracking-wide uppercase flex-shrink-0">
-              Live Demo
+              Demo
             </span>
             <span className="truncate">
-              This is a live demo with isolated in-memory session storage. Zero disk persistence. To use the full private application with persistent storage, please clone the <span className="font-semibold underline">main</span> branch.
+              This is a live demo with limited capabilities, please clone the main repo for full features.
             </span>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -92,17 +98,24 @@ function AppContent() {
         </div>
       )}
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar setPage={setPage} activePage={page} />
-        <div className="flex flex-col flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
+        <Sidebar 
+          setPage={setPage} 
+          activePage={page} 
+          isOpen={sidebarOpen} 
+          setIsOpen={setSidebarOpen} 
+        />
+        <div className="flex flex-col flex-1 overflow-hidden min-w-0">
           <Navbar
             onOpenAddExpense={() => setIsModalOpen(true)}
             darkMode={darkMode}
             onToggleDarkMode={toggleDarkMode}
             onNavigateSettings={() => setPage("Settings")}
             onResetDemo={handleResetDemo}
+            isSidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
           />
-          <main className="flex-1 p-6 overflow-auto">{content}</main>
+          <main className="flex-1 p-4 md:p-6 overflow-auto">{content}</main>
         </div>
       </div>
 
