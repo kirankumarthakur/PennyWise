@@ -213,6 +213,15 @@ class SqliteInMemoryExpenseRepository(ExpenseRepository):
             self.conn.execute("DELETE FROM expenses")
             self.conn.commit()
 
+    def update_dates(self, target_date: str, new_date: str) -> int:
+        with self.lock:
+            cursor = self.conn.execute(
+                "UPDATE expenses SET date = ? WHERE date = ?",
+                (new_date, target_date),
+            )
+            self.conn.commit()
+            return cursor.rowcount
+
     def count(self) -> int:
         with self.lock:
             cursor = self.conn.execute("SELECT COUNT(*) FROM expenses")
