@@ -13,8 +13,11 @@ function escapeHtml(str) {
 
 function escapeCsvField(val) {
   if (val == null) return '""';
-  const str = String(val).replace(/"/g, '""');
-  return `"${str}"`;
+  let str = String(val);
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  return `"${str.replace(/"/g, '""')}"`;
 }
 
 export default function Reports() {

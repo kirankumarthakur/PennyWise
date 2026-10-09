@@ -1,5 +1,3 @@
-"""Settings API routes for managing in-memory session preferences and zero-persistence AI testing."""
-
 import time
 import logging
 from flask import Blueprint, jsonify, request, current_app
@@ -49,7 +47,7 @@ def get_settings():
         "success": True,
         "settings": {
             "is_demo": True,
-            "demo_notice": "PennyWise Live Demo runs with ephemeral in-memory sessions. API keys are kept in your browser memory and never written to server storage.",
+            "demo_notice": "PennyWise Live Demo runs with ephemeral in-memory sessions. API keys are kept in browser memory and never written to server storage.",
             "active_provider": prefs.get("active_provider", "gemini"),
             "providers": {
                 "gemini": {
@@ -81,7 +79,7 @@ def update_settings():
     session = session_store.get_or_create(session_id)
     prefs = session.setdefault("settings", {})
 
-    payload = request.get_json() or {}
+    payload = request.get_json(silent=True) or {}
 
     if "active_provider" in payload:
         provider = str(payload["active_provider"]).lower().strip()
@@ -111,7 +109,7 @@ def update_settings():
 
 @settings_bp.route("/test-key", methods=["POST"])
 def test_key():
-    payload = request.get_json() or {}
+    payload = request.get_json(silent=True) or {}
     api_key = (
         request.headers.get("X-AI-Key")
         or payload.get("api_key", "")
@@ -120,10 +118,14 @@ def test_key():
         request.headers.get("X-AI-Provider")
         or payload.get("provider", "gemini")
     ).lower().strip()
-    model = (
-        request.headers.get("X-AI-Model")
-        or payload.get("model")
-    )
+    model = request.headers.get("X-AI-Model") or payload.get("model")
+
+    if provider not in PUBLIC_MODELS:
+        return jsonify({
+            "success": False,
+            "connected": False,
+            "error": f"Unsupported provider: {provider}",
+        }), 400
 
     if not api_key:
         return jsonify({
@@ -141,9 +143,12 @@ def test_key():
         }), 400
 
     start_time = time.perf_counter()
-    is_valid, detail = client.validate_connection()
-    latency_ms = round((time.perf_counter() - start_time) * 1000)
+    try:
+        is_valid, detail = client.validate_connection()
+    except Exception as e:
+        is_valid, detail = False, type(e).__name__
 
+    latency_ms = round((time.perf_counter() - start_time) * 1000)
     active_model = getattr(client, "model", model)
 
     if is_valid:
@@ -158,25 +163,25 @@ def test_key():
             "message": f"Successfully verified {provider.title()} ({active_model}) in {latency_ms}ms.",
         })
     else:
+        safe_error = "Authentication failed. Please verify your API key."
         return jsonify({
             "success": False,
             "connected": False,
             "latency_ms": latency_ms,
             "provider": provider,
             "model": active_model,
-            "error": detail or f"Authentication failed with {provider.title()}.",
+            "error": safe_error,
         }), 400
 
 
-@settings_bp.route("/models", methods=["POST", "GET"])
+@settings_bp.route("/models", methods=["POST"])
 def fetch_provider_models():
-    if request.method == "POST":
-        payload = request.get_json() or {}
-        api_key = (request.headers.get("X-AI-Key") or payload.get("api_key", "")).strip()
-        provider = (request.headers.get("X-AI-Provider") or payload.get("provider", "gemini")).lower().strip()
-    else:
-        api_key = (request.headers.get("X-AI-Key") or request.args.get("api_key", "")).strip()
-        provider = (request.headers.get("X-AI-Provider") or request.args.get("provider", "gemini")).lower().strip()
+    payload = request.get_json(silent=True) or {}
+    api_key = (request.headers.get("X-AI-Key") or payload.get("api_key", "")).strip()
+    provider = (request.headers.get("X-AI-Provider") or payload.get("provider", "gemini")).lower().strip()
+
+    if provider not in PUBLIC_MODELS:
+        return jsonify({"success": False, "error": f"Unsupported provider: {provider}"}), 400
 
     baseline_models = PUBLIC_MODELS.get(provider, [])
 
@@ -208,6 +213,6 @@ def fetch_provider_models():
     except Exception as e:
         return jsonify({
             "success": False,
-            "error": f"Could not query live models: {str(e)}",
+            "error": "Could not query models from provider.",
             "models": baseline_models,
         }), 500

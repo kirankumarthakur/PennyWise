@@ -1,8 +1,7 @@
-"""REST API routes for bill processing and expense categorization."""
-
 import io
 import uuid
 import logging
+from PIL import Image
 from flask import Blueprint, request, jsonify, current_app, Response
 from backend.config import AppConfig
 
@@ -10,9 +9,11 @@ logger = logging.getLogger(__name__)
 
 bill_bp = Blueprint("bill", __name__, url_prefix="/api")
 
+MAX_PDF_PAGES = 5
+MAX_IMAGE_DIMENSION = 4000
+
 
 def _validate_magic_bytes(header: bytes, ext: str) -> bool:
-    """Validate file content against magic signatures."""
     if ext == "pdf":
         return header.startswith(b"%PDF")
     if ext in ("jpg", "jpeg"):
@@ -24,9 +25,32 @@ def _validate_magic_bytes(header: bytes, ext: str) -> bool:
     return False
 
 
+def _check_pdf_page_count(pdf_bytes: bytes) -> bool:
+    try:
+        import fitz
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        count = doc.page_count
+        doc.close()
+        return count <= MAX_PDF_PAGES
+    except Exception:
+        try:
+            import pypdf
+            reader = pypdf.PdfReader(io.BytesIO(pdf_bytes))
+            return len(reader.pages) <= MAX_PDF_PAGES
+        except Exception:
+            return True
+
+
+def _check_image_dimensions(image_bytes: bytes) -> bool:
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as img:
+            return img.width <= MAX_IMAGE_DIMENSION and img.height <= MAX_IMAGE_DIMENSION
+    except Exception:
+        return False
+
+
 @bill_bp.route("/process-bill", methods=["POST"])
 def process_bill():
-    """Upload and process a bill image or PDF with ephemeral in-memory storage."""
     bill_processor = current_app.extensions["bill_processor"]
     ai_service = current_app.extensions.get("ai_service")
     session_store = current_app.extensions.get("session_store")
@@ -37,7 +61,6 @@ def process_bill():
     model = request.headers.get("X-AI-Model")
 
     try:
-        # 1. PDF file stream
         if "pdf" in request.files:
             file = request.files["pdf"]
             if not file.filename:
@@ -50,6 +73,9 @@ def process_bill():
             pdf_bytes = file.stream.read()
             if not _validate_magic_bytes(pdf_bytes[:16], ext):
                 return jsonify({"error": "Corrupted or invalid PDF file format", "success": False}), 400
+
+            if not _check_pdf_page_count(pdf_bytes):
+                return jsonify({"error": f"PDF exceeds {MAX_PDF_PAGES}-page demo limit.", "success": False}), 400
 
             filename = f"{session_id}_{uuid.uuid4().hex[:12]}.pdf"
             if session_store:
@@ -71,7 +97,6 @@ def process_bill():
 
             return jsonify(result.to_dict())
 
-        # 2. Image file stream
         if "image" in request.files:
             file = request.files["image"]
             if not file.filename:
@@ -84,6 +109,9 @@ def process_bill():
             image_bytes = file.stream.read()
             if not _validate_magic_bytes(image_bytes[:16], ext):
                 return jsonify({"error": "Invalid or corrupted image format", "success": False}), 400
+
+            if not _check_image_dimensions(image_bytes):
+                return jsonify({"error": f"Image exceeds {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION} dimension limit.", "success": False}), 400
 
             mime_type = file.content_type or f"image/{ext}"
             filename = f"{session_id}_{uuid.uuid4().hex[:12]}.{ext}"
@@ -116,13 +144,12 @@ def process_bill():
         return jsonify({"error": "No image or PDF file provided", "success": False}), 400
 
     except Exception as e:
-        logger.error("Failed to process bill: %s", e, exc_info=True)
-        return jsonify({"error": str(e), "success": False}), 500
+        logger.error("Failed to process bill: %s", type(e).__name__)
+        return jsonify({"error": "Bill processing failed", "success": False}), 500
 
 
 @bill_bp.route("/categorize-expense", methods=["POST"])
 def categorize_expense():
-    """Categorize an expense description and amount."""
     categorizer = current_app.extensions["categorization_service"]
 
     try:
@@ -136,28 +163,22 @@ def categorize_expense():
             "success": True
         })
     except Exception as e:
-        logger.error("Error categorizing expense: %s", e)
-        return jsonify({"error": str(e), "success": False}), 500
+        logger.error("Error categorizing expense: %s", type(e).__name__)
+        return jsonify({"error": "Categorization failed", "success": False}), 500
 
 
 @bill_bp.route("/receipts/<path:filename>", methods=["GET"])
 def get_receipt(filename: str):
-    """Serve an in-memory stored receipt document or image."""
-    session_store = current_app.extensions.get("session_store")
-    bill_processor = current_app.extensions.get("bill_processor")
-
     session_id = request.headers.get("X-Session-ID") or request.args.get("session_id")
     if not session_id and "_" in filename:
         session_id = filename.split("_", 1)[0]
     session_id = (session_id or "demo").strip()[:64]
 
-    receipt_info = None
-    if session_store:
-        receipt_info = session_store.get_receipt(session_id, filename)
+    session_store = current_app.extensions.get("session_store")
+    if not session_store:
+        return jsonify({"error": "Receipt store unavailable", "success": False}), 500
 
-    if not receipt_info and bill_processor and hasattr(bill_processor, "receipt_storage"):
-        receipt_info = bill_processor.receipt_storage.get_receipt(filename)
-
+    receipt_info = session_store.get_receipt(session_id, filename)
     if receipt_info:
         return Response(receipt_info["data"], mimetype=receipt_info["mime_type"])
 

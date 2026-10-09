@@ -51,18 +51,30 @@ export async function apiFetch(endpoint, options = {}) {
     headers.set("X-Session-ID", getSessionId());
   }
 
-  if (inMemoryCredentials.apiKey && !headers.has("X-AI-Key")) {
-    headers.set("X-AI-Key", inMemoryCredentials.apiKey);
-  }
-  if (inMemoryCredentials.provider && !headers.has("X-AI-Provider")) {
-    headers.set("X-AI-Provider", inMemoryCredentials.provider);
-  }
-  if (inMemoryCredentials.model && !headers.has("X-AI-Model")) {
-    headers.set("X-AI-Model", inMemoryCredentials.model);
+  const isAiEndpoint =
+    endpoint.includes("/api/ai/") ||
+    endpoint.includes("/api/settings/test-key") ||
+    endpoint.includes("/api/settings/models") ||
+    endpoint.includes("/api/process-bill");
+
+  const shouldAttachAiKey = options.includeAiKey != null ? options.includeAiKey : isAiEndpoint;
+
+  if (shouldAttachAiKey && inMemoryCredentials.apiKey) {
+    if (!headers.has("X-AI-Key")) {
+      headers.set("X-AI-Key", inMemoryCredentials.apiKey);
+    }
+    if (!headers.has("X-AI-Provider")) {
+      headers.set("X-AI-Provider", inMemoryCredentials.provider);
+    }
+    if (inMemoryCredentials.model && !headers.has("X-AI-Model")) {
+      headers.set("X-AI-Model", inMemoryCredentials.model);
+    }
   }
 
+  const { includeAiKey, ...fetchOptions } = options;
+
   return fetch(url, {
-    ...options,
+    ...fetchOptions,
     headers,
   });
 }
