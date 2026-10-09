@@ -10,6 +10,7 @@ import PieChartCard from "./PieChartCard";
 import LineChartCard from "./LineChartCard";
 import SubscriptionRadar from "./SubscriptionRadar";
 import UploadCard from "./UploadCard";
+import AddExpenseModal from "./AddExpenseModal";
 import AiInsightsHub from "./ai/AiInsightsHub";
 import AiSmartFillModal from "./ai/AiSmartFillModal";
 import { apiFetch } from "../config/api";
